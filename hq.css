@@ -120,6 +120,21 @@ body.hq-advisor-open #hq_advisor { display: block; }
 }
 #hq_advisor .adv_do:active { transform: translateY(1px); }
 
+/* ---------------- 建议目标高亮：金色信号弹 ---------------- */
+
+.adv_highlight {
+	outline: 3px solid #ffd75e !important;
+	outline-offset: 2px;
+	border-radius: 6px;
+	animation: adv-hl 1.1s ease-in-out infinite !important;
+	position: relative;
+	z-index: 30;
+}
+@keyframes adv-hl {
+	0%, 100% { box-shadow: 0 0 0 4px rgba(255, 215, 94, 0.8), 0 0 24px 8px rgba(255, 176, 56, 0.55); }
+	50%      { box-shadow: 0 0 0 12px rgba(255, 215, 94, 0.12), 0 0 34px 12px rgba(255, 176, 56, 0.2); }
+}
+
 /* ---------------- 参谋：手机（底部抽屉） ---------------- */
 
 @media (max-width: 800px) {

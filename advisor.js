@@ -171,6 +171,65 @@ function describe_suggestion(sug) {
 var panel = null
 var last_prompt = ""
 var pending_sug = null
+var hl_timer = null
+
+/* ---------- 高亮建议目标 ---------- */
+
+function clear_highlight() {
+	var els = document.querySelectorAll(".adv_highlight")
+	for (var i = 0; i < els.length; ++i)
+		els[i].classList.remove("adv_highlight")
+	if (hl_timer) {
+		clearTimeout(hl_timer)
+		hl_timer = null
+	}
+}
+
+function highlight_suggestion(sug) {
+	clear_highlight()
+	var el = null
+	var kind = "button"
+	try {
+		if (sug.verb === "card" || sug.verb.indexOf("play_") === 0) {
+			el = cards[sug.noun] && cards[sug.noun].element
+			kind = "card"
+		} else if (sug.verb === "space" || sug.verb === "attack") {
+			el = spaces[sug.noun] && spaces[sug.noun].element
+			kind = "map"
+		} else if ((sug.verb === "piece" || sug.verb === "eliminate" || sug.verb === "retreat" || sug.verb === "use") &&
+				typeof sug.noun === "number" && pieces[sug.noun]) {
+			el = pieces[sug.noun].element
+			kind = "map"
+		} else {
+			el = document.getElementById(sug.verb + "_button")
+		}
+	} catch (e) {}
+	if (!el)
+		return
+
+	if (MOBILE_MQ.matches) {
+		if (kind === "card") {
+			// 打开手牌抽屉给你看是哪张
+			document.body.classList.add("hq-hand-open")
+			document.body.classList.remove("hq-advisor-open")
+		} else if (kind === "map") {
+			document.body.classList.remove("hq-hand-open")
+			document.body.classList.remove("hq-advisor-open")
+		}
+	}
+
+	el.classList.add("adv_highlight")
+	setTimeout(function () {
+		try {
+			if (kind === "map" && typeof scroll_into_view === "function")
+				scroll_into_view(el)
+			else
+				el.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" })
+		} catch (e) {}
+	}, 80)
+
+	hl_timer = setTimeout(clear_highlight, 10000)
+}
 
 function build_panel() {
 	panel = document.createElement("div")
@@ -199,6 +258,7 @@ function build_panel() {
 	panel.querySelector(".adv_do").addEventListener("click", function () {
 		if (pending_sug && typeof send_action === "function") {
 			send_action(pending_sug.verb, pending_sug.noun)
+			clear_highlight()
 			hide_result()
 		}
 	})
@@ -267,6 +327,7 @@ function compute_suggestion() {
 				(sug.n_options > 1 ? "（从 " + sug.n_options + " 个合法选项中推演选出）" : "（当前唯一选项）")
 			panel.querySelector(".adv_do").hidden = false
 			pending_sug = sug
+			highlight_suggestion(sug)
 		}
 	}, 30)
 }
@@ -278,6 +339,7 @@ function refresh_hint() {
 	if (p === last_prompt)
 		return
 	last_prompt = p
+	clear_highlight()
 	hide_result()
 	var a = view.actions || {}
 	var hint = DEFAULT_HINT
