@@ -61,6 +61,12 @@
 		<label><input type="radio" name="scenario" value="The Great War"> 大战剧本</label>
 	</fieldset>
 
+	<fieldset>
+		<legend>AI 强度</legend>
+		<label><input type="radio" name="ai" value="nn" checked> 神经网络（自对弈训练）</label>
+		<label><input type="radio" name="ai" value="heuristic"> 启发式（较弱）</label>
+	</fieldset>
+
 	<button onclick="start_new()">开 始 新 游 戏</button>
 	<button id="continue" class="secondary" onclick="continue_game()" disabled>继续上次的游戏</button>
 
@@ -84,6 +90,7 @@ function start_new() {
 		q.set("role", "Allied Powers")
 	} else {
 		q.set("role", side)
+		q.set("ai", get("ai"))
 	}
 	if (!localStorage.getItem("pog_local_save") || confirm("会覆盖已有的存档，确定开新局吗？"))
 		location.href = "play.html?" + q.toString()

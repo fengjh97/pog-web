@@ -148,6 +148,7 @@ LocalSocket.prototype._init = async function () {
 			options: {},
 			hotseat: hotseat,
 			ai_role: hotseat ? null : (self.role === AP ? CP : AP),
+			ai_kind: page.get("ai") === "nn" ? "nn" : "heuristic",
 		}
 		game = RULES.setup(seed, scenario, {})
 		snaps = []
@@ -284,6 +285,40 @@ LocalSocket.prototype._maybe_hotseat_switch = function () {
 /* ---------- AI ---------- */
 
 var ai_timer = null
+var nn_model = null      // value network weights, loaded on demand
+var nn_load_failed = false
+
+function maybe_load_model() {
+	if (nn_model || nn_load_failed)
+		return
+	if (!save_meta || save_meta.ai_kind !== "nn")
+		return
+	fetch("model.json").then(function (r) {
+		if (!r.ok) throw new Error("no model")
+		return r.json()
+	}).then(function (m) {
+		nn_model = m
+		console.log("NN model loaded:", m.meta)
+	}).catch(function (err) {
+		console.error("NN model unavailable, falling back to heuristic:", err)
+		nn_load_failed = true
+	})
+}
+
+/* value of a state for the AI: NN if available, else hand-crafted heuristic */
+function eval_state_dispatch(s) {
+	if (nn_model && save_meta.ai_kind === "nn" &&
+			typeof window.nn_forward === "function" && window.pog_features) {
+		if (s.state === "game_over") {
+			if (s.result === CP) return 1e6
+			if (s.result === AP) return -1e6
+			return 0
+		}
+		// scale P(CP win) so terminal bonuses still dominate
+		return 1000 * window.nn_forward(nn_model, window.pog_features.extract(s))
+	}
+	return eval_state(s)
+}
 
 function role_is_active(role) {
 	return game.active === role || game.active === "Both" || game.active === "All"
@@ -292,6 +327,7 @@ function role_is_active(role) {
 function schedule_ai(sock) {
 	if (!save_meta || save_meta.hotseat || !save_meta.ai_role)
 		return
+	maybe_load_model()
 	if (game.state === "game_over")
 		return
 	if (!role_is_active(save_meta.ai_role))
@@ -308,6 +344,12 @@ function ai_step(sock) {
 	var role = save_meta.ai_role
 	if (game.state === "game_over" || !role_is_active(role))
 		return
+
+	// wait for the value network to finish loading
+	if (save_meta.ai_kind === "nn" && !nn_model && !nn_load_failed) {
+		ai_timer = setTimeout(function () { ai_timer = null; ai_step(sock) }, 200)
+		return
+	}
 
 	var prev_active = game.active
 	var acted = false
@@ -391,7 +433,7 @@ function ai_choose(candidates, role, v) {
 		var score
 		try {
 			s = RULES.action(s, role, pool[i][0], pool[i][1])
-			score = sign * eval_state(s) + Math.random() * 0.25
+			score = sign * eval_state_dispatch(s) + Math.random() * 0.25
 		} catch (err) {
 			score = -Infinity
 		}
