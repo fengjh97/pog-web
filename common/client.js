@@ -416,7 +416,10 @@ function update_notepad(text) {
 	notepad.is_dirty = false
 	document.getElementById("notepad_input").value = text
 	document.getElementById("notepad_save").disabled = true
-	show_notepad()
+	// local build: don't auto-open on the "note" push at game load —
+	// on a phone the notepad would cover the whole board
+	if (notepad.is_visible)
+		show_notepad()
 }
 
 function save_notepad() {

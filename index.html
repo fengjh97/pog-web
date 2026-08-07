@@ -2,79 +2,533 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b1813">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="光荣之路 Paths of Glory —— 第一次世界大战卡牌驱动战棋，浏览器单机版。">
 <title>光荣之路 · Paths of Glory 单机版</title>
 <link rel="icon" href="favicon.png">
 <style>
-	html { box-sizing: border-box; }
-	*, *:before, *:after { box-sizing: inherit; }
-	body {
-		margin: 0; min-height: 100vh;
-		display: flex; align-items: center; justify-content: center;
-		background: #3b3a37 url(map75.jpg) center/cover no-repeat fixed;
-		font-family: "Source Serif", Georgia, "Songti SC", serif;
+/* ---------- 本地字体（相对路径，可离线 / 可子目录部署） ---------- */
+@font-face {
+	font-family: 'PoG Serif';
+	src: url('fonts/SourceSerif4-Regular.woff2') format('woff2');
+	font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+	font-family: 'PoG Serif';
+	src: url('fonts/SourceSerif4-Semibold.woff2') format('woff2');
+	font-weight: 700; font-style: normal; font-display: swap;
+}
+
+/* ---------- 变量 ---------- */
+:root {
+	--paper:        #efe3c8;
+	--paper-2:      #e6d8b8;
+	--paper-edge:   #cbb98d;
+	--ink:          #241f17;
+	--ink-soft:     #5c503a;
+	--ink-faint:    #7d6f53;
+	--crimson:      #8d2b1c;
+	--olive:        #414c31;
+	--brass:        #a8853f;
+	--cream:        #f5ecd6;
+
+	--serif: 'PoG Serif', Georgia, 'Times New Roman', serif;
+	--cjk: 'Songti SC', 'STSong', 'Noto Serif CJK SC', 'Source Han Serif SC', serif;
+	--stack: var(--serif), var(--cjk);
+
+	--r: 3px;
+}
+
+* , *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+	margin: 0;
+	min-height: 100vh;
+	min-height: 100dvh;
+	display: flex;
+	padding: clamp(10px, 3.2vw, 40px);
+	padding-top: max(clamp(10px, 3.2vw, 40px), env(safe-area-inset-top));
+	padding-bottom: max(clamp(10px, 3.2vw, 40px), env(safe-area-inset-bottom));
+	font-family: var(--stack);
+	color: var(--ink);
+	background-color: #191612;
+	line-height: 1.5;
+	-webkit-tap-highlight-color: rgba(141, 43, 28, 0.2);
+}
+
+/* ---------- 背景：战场地图 + 暗化 + 暗角 + 颗粒 ---------- */
+.bg, .bg-tint, .bg-grain {
+	position: fixed; inset: 0; pointer-events: none;
+}
+.bg {
+	background: #2a251d url(map75.jpg) center center / cover no-repeat;
+	filter: sepia(0.55) saturate(0.6) contrast(1.05) brightness(0.5);
+}
+.bg-tint {
+	background:
+		radial-gradient(120% 90% at 50% 12%, rgba(196,150,84,0.20), rgba(0,0,0,0) 55%),
+		radial-gradient(140% 110% at 50% 50%, rgba(0,0,0,0) 30%, rgba(10,8,6,0.85) 100%),
+		linear-gradient(180deg, rgba(20,16,12,0.66), rgba(16,13,10,0.80));
+}
+.bg-grain {
+	opacity: 0.5;
+	background-image:
+		repeating-linear-gradient(0deg,   rgba(255,255,255,0.028) 0 1px, rgba(0,0,0,0.035) 1px 2px),
+		repeating-linear-gradient(90deg,  rgba(255,255,255,0.020) 0 1px, rgba(0,0,0,0.028) 1px 3px);
+}
+
+/* ---------- 纸张主体 ---------- */
+.sheet {
+	position: relative;
+	z-index: 1;
+	margin: auto;
+	width: 100%;
+	max-width: 460px;
+	background:
+		radial-gradient(90% 60% at 8% 0%, rgba(255,255,255,0.42), rgba(255,255,255,0) 60%),
+		radial-gradient(70% 50% at 100% 100%, rgba(150,116,60,0.20), rgba(255,255,255,0) 60%),
+		linear-gradient(168deg, var(--paper) 0%, var(--paper-2) 100%);
+	border: 1px solid #8a7647;
+	border-radius: var(--r);
+	box-shadow:
+		0 0 0 1px rgba(255,248,228,0.16),
+		0 2px 0 rgba(0,0,0,0.25),
+		0 26px 60px -12px rgba(0,0,0,0.78),
+		0 6px 18px rgba(0,0,0,0.45);
+	overflow: hidden;
+}
+
+/* ---------- 海报头 ---------- */
+.poster {
+	position: relative;
+	padding: 20px 20px 16px;
+	color: var(--cream);
+	background: #22201a;
+	text-align: center;
+	overflow: hidden;
+}
+.poster::before {
+	content: "";
+	position: absolute; inset: 0;
+	background: url(map75.jpg) 32% 34% / 280% auto no-repeat;
+	filter: sepia(0.7) contrast(1.1) brightness(0.42) saturate(0.55);
+}
+.poster::after {
+	content: "";
+	position: absolute; inset: 0;
+	background:
+		radial-gradient(75% 100% at 50% 0%, rgba(196,150,84,0.28), rgba(0,0,0,0) 62%),
+		radial-gradient(120% 100% at 50% 50%, rgba(0,0,0,0.15) 20%, rgba(12,10,8,0.86) 100%);
+}
+.poster > * { position: relative; z-index: 1; }
+
+.eyebrow {
+	font-family: var(--serif);
+	font-size: 10px;
+	letter-spacing: 0.28em;
+	text-transform: uppercase;
+	color: #d9bd83;
+	margin: 0 0 12px;
+	text-indent: 0.28em;
+}
+.eyebrow span { opacity: 0.55; }
+
+h1 {
+	font-family: var(--cjk);
+	font-weight: 700;
+	margin: 0;
+	font-size: clamp(34px, 10.8vw, 48px);
+	line-height: 1.06;
+	letter-spacing: 0.16em;
+	text-indent: 0.16em;
+	color: #fbf3e0;
+	text-shadow: 0 2px 0 rgba(0,0,0,0.55), 0 0 26px rgba(196,150,84,0.35);
+}
+.latin {
+	font-family: var(--serif);
+	font-size: clamp(11px, 3.4vw, 13px);
+	letter-spacing: 0.42em;
+	text-indent: 0.42em;
+	text-transform: uppercase;
+	color: #cdae76;
+	margin-top: 8px;
+}
+
+.divider {
+	display: flex; align-items: center; gap: 10px;
+	margin: 11px auto 9px;
+	max-width: 260px;
+	color: #b18f52;
+}
+.divider::before, .divider::after {
+	content: ""; flex: 1; height: 1px;
+	background: linear-gradient(90deg, rgba(177,143,82,0), rgba(177,143,82,0.85), rgba(177,143,82,0));
+}
+.divider b { font-size: 11px; font-weight: 400; letter-spacing: 0.2em; }
+
+.years {
+	margin: 0;
+	font-family: var(--serif);
+	font-size: clamp(15px, 4.6vw, 17px);
+	letter-spacing: 0.3em;
+	text-indent: 0.3em;
+	color: #e8d3a5;
+}
+.tagline {
+	margin: 6px 0 0;
+	font-size: 12.5px;
+	letter-spacing: 0.16em;
+	text-indent: 0.16em;
+	color: #b8a684;
+}
+
+/* ---------- 表单区 ---------- */
+.panel {
+	padding: 16px 16px 18px;
+	border-top: 1px solid #8a7647;
+	box-shadow: inset 0 1px 0 rgba(255,250,235,0.55);
+}
+
+fieldset {
+	border: 0;
+	margin: 0 0 12px;
+	padding: 0;
+	min-width: 0;
+}
+legend {
+	display: block;
+	width: 100%;
+	padding: 0 0 6px;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.26em;
+	text-indent: 0.26em;
+	text-transform: uppercase;
+	color: var(--ink-soft);
+	border-bottom: 1px solid rgba(122,102,60,0.32);
+	margin-bottom: 8px;
+}
+legend .hint {
+	float: right;
+	font-weight: 400;
+	font-size: 10.5px;
+	letter-spacing: 0.06em;
+	text-indent: 0;
+	color: var(--ink-faint);
+	text-transform: none;
+}
+
+.opts { display: grid; gap: 8px; }
+.opts.two { grid-template-columns: 1fr 1fr; }
+
+.opt {
+	position: relative;
+	display: block;
+	cursor: pointer;
+}
+.opt input {
+	position: absolute;
+	inset: 0;
+	width: 100%; height: 100%;
+	margin: 0;
+	opacity: 0;
+	cursor: pointer;
+	-webkit-appearance: none;
+	appearance: none;
+}
+.tile {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 48px;
+	padding: 9px 12px 9px 10px;
+	border: 1px solid var(--paper-edge);
+	border-left: 4px solid rgba(120,100,64,0.35);
+	border-radius: var(--r);
+	background: linear-gradient(180deg, rgba(255,252,242,0.7), rgba(255,247,228,0.18));
+	box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+	transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.dot {
+	flex: 0 0 auto;
+	width: 15px; height: 15px;
+	border-radius: 50%;
+	border: 1px solid #9c8757;
+	background: rgba(255,253,246,0.75);
+	box-shadow: inset 0 1px 2px rgba(90,72,40,0.28);
+	position: relative;
+}
+.txt { min-width: 0; }
+.name {
+	display: block;
+	font-size: 15.5px;
+	line-height: 1.25;
+	letter-spacing: 0.04em;
+}
+.desc {
+	display: block;
+	font-size: 11px;
+	line-height: 1.35;
+	letter-spacing: 0.02em;
+	color: var(--ink-faint);
+	margin-top: 2px;
+}
+
+.opt input:hover + .tile { border-color: #b09a63; background: linear-gradient(180deg, rgba(255,253,246,0.95), rgba(255,246,224,0.5)); }
+.opt input:checked + .tile {
+	background: linear-gradient(180deg, #343026, #26231c);
+	border-color: #1d1a14;
+	border-left-color: var(--crimson);
+	color: var(--cream);
+	box-shadow: inset 0 1px 0 rgba(255,255,255,0.10), 0 1px 3px rgba(0,0,0,0.30);
+}
+.opt input:checked + .tile .desc { color: #b6a781; }
+.opt input:checked + .tile .dot {
+	border-color: #c9a869;
+	background: #1a1712;
+	box-shadow: none;
+}
+.opt input:checked + .tile .dot::after {
+	content: "";
+	position: absolute; inset: 3px;
+	border-radius: 50%;
+	background: var(--crimson);
+	box-shadow: 0 0 6px rgba(180,70,45,0.8);
+}
+.opt input:focus-visible + .tile {
+	outline: 2px solid var(--crimson);
+	outline-offset: 2px;
+}
+
+/* 热座时 AI 组失效提示（仅视觉，不改变取值逻辑） */
+.ai-group { transition: opacity 0.18s ease; }
+body:has(input[name="side"][value="hotseat"]:checked) .ai-group { opacity: 0.42; }
+body:has(input[name="side"][value="hotseat"]:checked) .ai-group .hotseat-note { display: inline; }
+.hotseat-note { display: none; }
+
+/* ---------- 按钮 ---------- */
+.actions { display: grid; gap: 9px; margin-top: 14px; }
+
+button {
+	font-family: var(--stack);
+	width: 100%;
+	min-height: 52px;
+	padding: 12px 14px;
+	border-radius: var(--r);
+	cursor: pointer;
+	font-size: 17px;
+	letter-spacing: 0.32em;
+	text-indent: 0.32em;
+	transition: filter 0.15s ease, background 0.15s ease;
+}
+button:focus-visible { outline: 2px solid #2b2419; outline-offset: 2px; }
+
+.btn-primary {
+	color: #fdf4e0;
+	background: linear-gradient(180deg, #a1361f, #7c2416);
+	border: 1px solid #5c1a0f;
+	box-shadow: inset 0 1px 0 rgba(255,220,190,0.28), 0 2px 5px rgba(0,0,0,0.30);
+	font-weight: 700;
+}
+.btn-primary:hover { filter: brightness(1.09); }
+.btn-primary:active { filter: brightness(0.94); }
+
+.btn-secondary {
+	min-height: 48px;
+	font-size: 14.5px;
+	letter-spacing: 0.18em;
+	text-indent: 0.18em;
+	color: #33301f;
+	background: linear-gradient(180deg, rgba(255,252,242,0.85), rgba(238,226,198,0.85));
+	border: 1px solid #a08d5d;
+	box-shadow: inset 0 1px 0 rgba(255,255,255,0.7);
+}
+.btn-secondary:hover { background: linear-gradient(180deg, #fffdf6, #eee0b8); }
+.btn-secondary[disabled] {
+	opacity: 0.42;
+	cursor: default;
+	box-shadow: none;
+}
+
+.save-state {
+	margin: 8px 0 0;
+	text-align: center;
+	font-size: 11px;
+	letter-spacing: 0.08em;
+	color: var(--ink-faint);
+}
+.save-state.has-save { color: var(--olive); }
+
+/* ---------- 版权说明 ---------- */
+.note {
+	margin: 14px 0 0;
+	padding-top: 12px;
+	border-top: 1px solid rgba(122,102,60,0.3);
+	font-size: 11.5px;
+	line-height: 1.75;
+	color: var(--ink-faint);
+	text-align: justify;
+}
+
+/* ---------- 桌面 ---------- */
+@media (min-width: 900px) {
+	.sheet {
+		max-width: 940px;
+		display: grid;
+		grid-template-columns: 0.86fr 1fr;
 	}
-	body::before {
-		content: ""; position: fixed; inset: 0;
-		background: rgba(30,28,24,0.72);
+	.poster {
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		padding: 46px 34px;
+		text-align: left;
+		border-right: 1px solid #8a7647;
 	}
-	.card {
-		position: relative; z-index: 1;
-		width: min(92vw, 430px);
-		background: #f3ead8; color: #26221c;
-		border: 2px solid #6b5b3e; border-radius: 6px;
-		box-shadow: 0 12px 40px rgba(0,0,0,0.6);
-		padding: 28px 30px 24px;
+	.poster::before { background-size: cover; background-position: 42% 45%; }
+	h1 { font-size: 58px; }
+	.divider { margin: 18px 0 14px; max-width: 240px; }
+	.panel {
+		padding: 34px 34px 30px;
+		border-top: 0;
+		box-shadow: none;
 	}
-	h1 { margin: 0 0 2px; font-size: 30px; letter-spacing: 2px; }
-	.sub { margin: 0 0 18px; color: #6b5b3e; font-size: 13px; letter-spacing: 1px; }
-	fieldset { border: 1px solid #c9b998; border-radius: 4px; margin: 0 0 14px; padding: 10px 14px 12px; }
-	legend { font-size: 13px; color: #6b5b3e; padding: 0 6px; }
-	label { display: inline-flex; align-items: center; gap: 6px; margin-right: 16px; font-size: 15px; cursor: pointer; }
-	button {
-		display: block; width: 100%; margin-top: 10px; padding: 11px 0;
-		font-family: inherit; font-size: 17px; letter-spacing: 3px; cursor: pointer;
-		background: #4a5a3a; color: #f3ead8; border: 1px solid #33402a; border-radius: 4px;
-	}
-	button:hover { background: #55693f; }
-	button.secondary { background: #8a7a55; border-color: #6b5b3e; letter-spacing: 1px; font-size: 15px; padding: 9px 0; }
-	button.secondary:hover { background: #99885f; }
-	button[disabled] { opacity: 0.45; cursor: default; }
-	.note { margin-top: 14px; font-size: 12px; color: #6b5b3e; line-height: 1.6; }
+	.opts.two { gap: 10px; }
+	fieldset { margin-bottom: 18px; }
+	legend { padding-bottom: 8px; margin-bottom: 10px; }
+	.actions { margin-top: 20px; }
+	.note { margin-top: 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	* { transition: none !important; }
+}
 </style>
 </head>
 <body>
-<div class="card">
-	<h1>光荣之路</h1>
-	<p class="sub">PATHS OF GLORY — 第一次世界大战 1914–1918 · 单机版</p>
+<div class="bg"></div>
+<div class="bg-tint"></div>
+<div class="bg-grain"></div>
 
-	<fieldset>
-		<legend>你的阵营</legend>
-		<label><input type="radio" name="side" value="Allied Powers" checked> 协约国</label>
-		<label><input type="radio" name="side" value="Central Powers"> 同盟国</label>
-		<label><input type="radio" name="side" value="hotseat"> 热座（双方都由你操作）</label>
-	</fieldset>
+<main class="sheet">
 
-	<fieldset>
-		<legend>剧本</legend>
-		<label><input type="radio" name="scenario" value="Historical" checked> 历史剧本</label>
-		<label><input type="radio" name="scenario" value="The Great War"> 大战剧本</label>
-	</fieldset>
+	<header class="poster">
+		<p class="eyebrow">GMT Games <span>·</span> Card&#8209;Driven Wargame</p>
+		<h1>光荣之路</h1>
+		<div class="latin">Paths of Glory</div>
+		<div class="divider"><b>✦</b></div>
+		<p class="years">1914 — 1918</p>
+		<p class="tagline">第一次世界大战 · 浏览器单机版</p>
+	</header>
 
-	<fieldset>
-		<legend>AI 强度</legend>
-		<label><input type="radio" name="ai" value="nn" checked> 神经网络（自对弈训练）</label>
-		<label><input type="radio" name="ai" value="heuristic"> 启发式（较弱）</label>
-	</fieldset>
+	<div class="panel">
 
-	<button onclick="start_new()">开 始 新 游 戏</button>
-	<button id="continue" class="secondary" onclick="continue_game()" disabled>继续上次的游戏</button>
+		<fieldset>
+			<legend>你的阵营</legend>
+			<div class="opts">
+				<label class="opt">
+					<input type="radio" name="side" value="Allied Powers" checked>
+					<span class="tile">
+						<span class="dot"></span>
+						<span class="txt">
+							<span class="name">协约国</span>
+							<span class="desc">英 · 法 · 俄 · 意 · 美</span>
+						</span>
+					</span>
+				</label>
+				<label class="opt">
+					<input type="radio" name="side" value="Central Powers">
+					<span class="tile">
+						<span class="dot"></span>
+						<span class="txt">
+							<span class="name">同盟国</span>
+							<span class="desc">德 · 奥匈 · 奥斯曼 · 保加利亚</span>
+						</span>
+					</span>
+				</label>
+				<label class="opt">
+					<input type="radio" name="side" value="hotseat">
+					<span class="tile">
+						<span class="dot"></span>
+						<span class="txt">
+							<span class="name">热座对局</span>
+							<span class="desc">双方都由你操作，无 AI</span>
+						</span>
+					</span>
+				</label>
+			</div>
+		</fieldset>
 
-	<p class="note">
-		对手为内置 AI（启发式搜索，业余水平）。规则由引擎自动裁判，支持撤销与回放。<br>
-		规则实现与美术素材 © GMT Games；引擎源码 © Nathan Forget &amp; Tor Andersson (Rally the Troops)。仅供个人学习娱乐，请支持实体版。
-	</p>
-</div>
+		<fieldset>
+			<legend>剧本</legend>
+			<div class="opts two">
+				<label class="opt">
+					<input type="radio" name="scenario" value="Historical" checked>
+					<span class="tile">
+						<span class="dot"></span>
+						<span class="txt">
+							<span class="name">历史剧本</span>
+							<span class="desc">1914 年标准开局</span>
+						</span>
+					</span>
+				</label>
+				<label class="opt">
+					<input type="radio" name="scenario" value="The Great War">
+					<span class="tile">
+						<span class="dot"></span>
+						<span class="txt">
+							<span class="name">大战剧本</span>
+							<span class="desc">自由部署变体</span>
+						</span>
+					</span>
+				</label>
+			</div>
+		</fieldset>
+
+		<fieldset class="ai-group">
+			<legend>AI 强度 <span class="hint hotseat-note">热座模式下不适用</span></legend>
+			<div class="opts two">
+				<label class="opt">
+					<input type="radio" name="ai" value="nn" checked>
+					<span class="tile">
+						<span class="dot"></span>
+						<span class="txt">
+							<span class="name">神经网络</span>
+							<span class="desc">自对弈训练，较强</span>
+						</span>
+					</span>
+				</label>
+				<label class="opt">
+					<input type="radio" name="ai" value="heuristic">
+					<span class="tile">
+						<span class="dot"></span>
+						<span class="txt">
+							<span class="name">启发式</span>
+							<span class="desc">规则搜索，较弱</span>
+						</span>
+					</span>
+				</label>
+			</div>
+		</fieldset>
+
+		<div class="actions">
+			<button type="button" class="btn-primary" onclick="start_new()">开 始 新 游 戏</button>
+			<button type="button" id="continue" class="btn-secondary" onclick="continue_game()" disabled>继续上次的游戏</button>
+		</div>
+		<p class="save-state" id="save_state">本机暂无存档</p>
+
+		<p class="note">
+			对手为内置 AI（自对弈训练的价值网络 + 战斗推演）。规则由引擎自动裁判，支持撤销与回放。<br>
+			规则实现与美术素材 © GMT Games；引擎源码 © Nathan Forget &amp; Tor Andersson (Rally the Troops)。仅供个人学习娱乐，请支持实体版。
+		</p>
+
+	</div>
+</main>
+
 <script>
 function get(name) {
 	return document.querySelector('input[name="' + name + '"]:checked').value
@@ -111,8 +565,14 @@ function continue_game() {
 		alert("没有可用的存档")
 	}
 }
-if (localStorage.getItem("pog_local_save"))
+if (localStorage.getItem("pog_local_save")) {
 	document.getElementById("continue").disabled = false
+	var el = document.getElementById("save_state")
+	if (el) {
+		el.textContent = "检测到本机存档，可继续对局"
+		el.className = "save-state has-save"
+	}
+}
 </script>
 </body>
 </html>

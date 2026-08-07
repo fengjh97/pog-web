@@ -757,3 +757,197 @@ menu li.disabled:hover img {
 		border: none;
 	}
 }
+
+/* ============================================================================
+ * MOBILE / TOUCH UX  (appended 2026-08 — pure additions, nothing above edited)
+ *
+ * Two independent groups so that desktop (> 800px + fine pointer) is untouched:
+ *   A) touch-target sizing  -> narrow screen OR any coarse pointer
+ *                              (also covers phones in landscape, where the
+ *                               viewport is ~844px wide and the 800px layout
+ *                               breakpoint does NOT fire)
+ *   B) narrow-screen layout -> <= 800px only
+ * ============================================================================ */
+
+/* ---- A. TOUCH TARGETS (>= 44px) -------------------------------------- */
+
+@media (max-width: 800px), (pointer: coarse) {
+
+	/* header action buttons: the primary way to play on a phone */
+	#actions button {
+		min-height: 44px;
+		padding: 6px 16px;
+		line-height: 28px;
+		font-size: 17px;
+	}
+	#actions button:enabled:active:hover {
+		padding: 7px 15px 5px 17px;
+	}
+
+	/* drop-down / context menu rows */
+	header details menu {
+		min-width: 200px;
+	}
+	menu li:not(.separator) {
+		min-height: 44px;
+		padding: 11px 12px;
+		line-height: 22px;
+		box-sizing: border-box;
+	}
+	menu li a,
+	menu li label {
+		margin: -11px -12px;
+		padding: 11px 12px;
+	}
+	menu li img {
+		height: 22px;
+		width: 22px;
+		vertical-align: -5px;
+	}
+
+	/* floating windows (chat / notepad): make the close box hittable */
+	#chat_window,
+	#notepad_window {
+		grid-template-columns: 1fr 44px;
+	}
+	#chat_x,
+	#notepad_x {
+		height: 44px;
+		line-height: 44px;
+		text-align: center;
+		font-size: 20px;
+	}
+	#notepad_footer button {
+		min-height: 44px;
+		padding: 6px 20px;
+	}
+	#chat_input,
+	#notepad_input {
+		font-size: 16px; /* >= 16px stops iOS Safari from zooming on focus */
+	}
+}
+
+/* ---- B. NARROW SCREEN LAYOUT (<= 800px) ------------------------------ */
+
+@media (max-width: 800px) {
+
+	/* Header stacks into full-width rows: toolbar / actions / prompt.
+	   (base sheet only does this below 400px, which leaves 400-800px
+	   floating and prone to overflow) */
+	#toolbar,
+	#actions {
+		float: none;
+	}
+	#actions {
+		min-width: 0;
+		min-height: 0;
+		justify-content: center;
+		padding: 6px 8px;
+		gap: 8px;
+		border-top: 1px solid #0002;
+	}
+	/* every action button hidden -> don't waste a whole row */
+	#actions:not(:has(button:not([hidden]))) {
+		display: none;
+	}
+
+	/* Prompt may wrap instead of being ellipsised into uselessness,
+	   but is capped at ~3 lines so it can never eat the board. */
+	#prompt {
+		min-width: 0;
+		margin: 0;
+		padding: 6px 10px;
+		font-size: 17px;
+		line-height: 23px;
+		white-space: normal;
+		text-overflow: clip;
+		overflow-x: hidden;
+		overflow-y: auto;
+		max-height: 81px;
+	}
+
+	/* log is the only long-form text on screen: give it a readable size */
+	#log {
+		font-size: 13px;
+		line-height: 19px;
+	}
+
+	/* aside is an overlay below 400px; 100vw ignores the safe-area padding
+	   applied to <html>, which pushes the page sideways on notched phones */
+	aside {
+		max-width: 100%;
+	}
+
+	/* popup menus must never widen the page */
+	menu {
+		max-width: calc(100vw - 12px);
+	}
+
+	/* status line clears the iOS home indicator */
+	footer {
+		bottom: calc(25px + env(safe-area-inset-bottom, 0px));
+	}
+}
+
+@media (pointer: coarse) and (max-width: 800px) {
+	footer {
+		bottom: calc(37px + env(safe-area-inset-bottom, 0px));
+	}
+}
+
+@media (max-width: 400px) {
+	aside {
+		width: 100%;
+	}
+}
+
+/* Short viewports (phone in landscape): shrink the chrome, keep the board. */
+@media (pointer: coarse) and (max-height: 480px) {
+	header summary img,
+	#toolbar button img {
+		height: 30px;
+		padding: 3px;
+	}
+	#actions {
+		padding: 4px 8px;
+	}
+	#actions button {
+		min-height: 40px;
+		line-height: 24px;
+		font-size: 16px;
+	}
+	#prompt {
+		font-size: 15px;
+		line-height: 20px;
+		max-height: 60px;
+		padding: 4px 10px;
+	}
+}
+
+/* Chat / notepad on a phone: bottom sheet instead of a full-screen cover.
+   (the base <= 800px rules turn them into static grid items that span the
+   whole board area, which hides the map completely) */
+@media (max-width: 800px) {
+	#chat_window,
+	#notepad_window {
+		align-self: end;
+		max-height: min(45dvh, 340px);
+		grid-template-rows: min-content minmax(0, 1fr) min-content;
+		border-top: 1px solid black;
+		box-shadow: 0 -4px 12px #0004;
+	}
+	#chat_text,
+	#notepad_input {
+		min-height: 0;
+	}
+}
+
+/* The base sheet hides #zoom_button on small touch screens, which leaves
+   pinch-to-zoom as the only way to see more than the top-left corner of a
+   2550x1650 map. On a phone that is the single most-used control, so keep
+   it visible (it still calls the same toggle_zoom() in common/client.js). */
+@media (pointer: coarse) and ( (max-width: 400px) or (max-height: 400px) ) {
+	#zoom_button {
+		display: block;
+	}
+}

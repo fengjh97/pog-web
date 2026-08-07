@@ -683,3 +683,182 @@ body.bevel .unit.tip { box-shadow: 0 0 0 1px #000, 0 0 0 4px yellow !important }
 	z-index: 300;
     }
 }
+
+/* ============================================================================
+ * MOBILE / TOUCH UX  (appended 2026-08 — pure additions, nothing above edited)
+ * See the matching block at the end of common/client.css.
+ *   A) touch targets -> narrow screen OR coarse pointer (covers landscape)
+ *   B) layout        -> <= 800px only, desktop untouched
+ * ============================================================================ */
+
+/* ---- A. TOUCH TARGETS (>= 44px) -------------------------------------- */
+
+@media (max-width: 800px), (pointer: coarse) {
+
+	/* card / activation context menus */
+	#card_popup,
+	#activation_popup {
+		min-width: 220px;
+		max-width: calc(100vw - 16px);
+		font-size: 16px;
+	}
+	#card_popup li[data-action],
+	#activation_popup li[data-action],
+	#card_popup li.title,
+	#activation_popup li.title {
+		min-height: 44px;
+		padding: 11px 14px;
+		line-height: 22px;
+		box-sizing: border-box;
+	}
+	#card_popup li.title,
+	#activation_popup li.title {
+		white-space: normal;
+		text-align: center;
+	}
+
+	/* draggable info dialogs: hittable close box */
+	.dialog {
+		grid-template-columns: 1fr 44px;
+	}
+	.dialog_x {
+		margin: 0;
+		width: 44px;
+		height: 44px;
+		line-height: 44px;
+		text-align: center;
+		font-size: 18px;
+	}
+
+	/* <dialog> buttons */
+	.rollback_buttons button {
+		min-height: 44px;
+		padding: 8px 18px;
+	}
+}
+
+/* ---- B. NARROW SCREEN LAYOUT (<= 800px) ------------------------------ */
+
+@media (max-width: 800px) {
+
+	/* Panels used to be pinned to the 2550px map width, which made every
+	   panel (hand, combat cards, reinforcement chart) live off-screen to
+	   the right. Keep them exactly one viewport wide instead; the map keeps
+	   its own horizontal scroll inside <main>. */
+	.panel-list {
+		min-width: 0;
+		width: 100%;
+		max-width: none;
+		box-sizing: border-box;
+	}
+
+	#cc-list {
+		grid-template-columns: 1fr;
+		max-width: none;
+	}
+
+	.panel {
+		margin: 8px;
+		max-width: none;
+	}
+
+	.panel-head {
+		padding: 5px 8px;
+	}
+
+	/* hand / combat cards become a horizontal swipe strip */
+	.panel-body {
+		flex-wrap: nowrap;
+		overflow-x: auto;
+		overflow-y: hidden;
+		overscroll-behavior-x: contain;
+		gap: 8px;
+		padding: 8px;
+		min-width: 0;
+		min-height: 0;
+		scroll-snap-type: x proximity;
+		scrollbar-width: thin;
+	}
+	.panel-body > * {
+		flex: 0 0 auto;
+		scroll-snap-align: center;
+	}
+	.panel-body:empty {
+		min-height: 16px;
+	}
+
+	/* smaller cards (original 250x350 = 5:7 ratio preserved) */
+	.card {
+		width: 170px;
+		height: 238px;
+		border-radius: 11px;
+	}
+
+	/* ...but the inspect tooltip stays big and readable */
+	#tooltip.card {
+		width: min(calc(100vw - 48px), 320px);
+		height: auto;
+		aspect-ratio: 5 / 7;
+		border-radius: 16px;
+		box-shadow: 0 6px 24px #0009;
+	}
+
+	/* reinforcement chart is 1044px wide: scroll it inside its frame
+	   instead of widening the page */
+	#reinforcements_wrap {
+		width: auto;
+		max-width: 100%;
+		box-sizing: border-box;
+		overflow: auto;
+		border-width: 4px;
+		margin: 8px 8px 24px 8px;
+	}
+
+	/* Score / card-list dialogs become a full-width sheet that scrolls
+	   internally, so the header (and its close box) is always reachable. */
+	.dialog {
+		grid-template-rows: min-content minmax(0, 1fr);
+		overflow: hidden;
+		background-color: floralwhite;
+	}
+	.dialog_header {
+		padding: 11px 8px;
+		line-height: 22px;
+		font-weight: bold;
+		cursor: default;
+	}
+	.dialog_body {
+		height: auto;
+		min-height: 0;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		line-height: 26px;
+	}
+
+	/* native modal <dialog> lives in the top layer, i.e. outside the
+	   safe-area padding on <html>, so it needs its own insets */
+	.modal-dialog {
+		box-sizing: border-box;
+		width: calc(100vw - 24px);
+		max-width: calc(100vw - 24px);
+		max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px);
+		overflow-y: auto;
+		padding: 16px;
+	}
+	.modal-dialog select {
+		width: 100%;
+		min-height: 44px;
+		margin-top: 6px;
+		font-size: 16px;
+	}
+	.rollback_buttons {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		justify-content: flex-end;
+	}
+	.rollback_buttons button {
+		flex: 1 1 auto;
+		margin: 0;
+	}
+}

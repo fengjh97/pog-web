@@ -2,9 +2,19 @@
 <!-- vim:set nowrap: -->
 <html lang="zh-CN">
 <head>
-	<meta name="viewport" content="width=device-width, height=device-height, user-scalable=no, interactive-widget=resizes-content, viewport-fit=content, viewport-fit=cover">
-	<meta name="theme-color" content="#444">
 	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, height=device-height, user-scalable=no, interactive-widget=resizes-content, viewport-fit=cover">
+	<meta name="theme-color" content="#444">
+	<meta name="color-scheme" content="light">
+	<!-- mobile: allow full-screen when added to the iOS/Android home screen; the
+	     translucent status bar works together with the env(safe-area-inset-*)
+	     padding already applied to <html> in common/client.css -->
+	<meta name="mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-capable" content="yes">
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+	<meta name="apple-mobile-web-app-title" content="光荣之路">
+	<!-- stop iOS from turning numbers in the game log into phone links -->
+	<meta name="format-detection" content="telephone=no">
 	<title>光荣之路 PATHS OF GLORY</title>
 	<link rel="icon" href="favicon.png">
 	<link rel="stylesheet" href="fonts/fonts.css">
