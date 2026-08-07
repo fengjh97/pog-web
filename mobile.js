@@ -142,6 +142,13 @@ function esc(s) {
 	return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
 }
 
+function card_art_url(c) {
+	// 与 images.css 的映射一致: card_ap_1 → cards.2x/card_ap_01.avif
+	var faction = c <= 65 ? "ap" : "cp"
+	var num = c <= 65 ? c : c - 65
+	return "cards.2x/card_" + faction + "_" + (num < 10 ? "0" + num : num) + ".avif"
+}
+
 function zhface_html(c) {
 	var card = (typeof cards !== "undefined") ? cards[c] : null
 	if (!card)
@@ -158,6 +165,7 @@ function zhface_html(c) {
 			"<div class=\"zh_ops\"><span>" + card.ops + "</span></div>" +
 			"<div class=\"zh_name\"><b>" + esc(name_zh) + "</b><i>" + esc(name_en) + "</i></div>" +
 		"</div>" +
+		"<div class=\"zh_art\" style=\"background-image:url('" + card_art_url(c) + "')\"></div>" +
 		"<div class=\"zh_fx\">" + esc(fx) + "</div>" +
 		"<div class=\"zh_bot\">" + bot + " " + cc_html + rm_html + "</div>"
 }

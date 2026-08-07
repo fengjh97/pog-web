@@ -352,6 +352,18 @@ body.hq-hand-open .panel-list {
 	text-overflow: ellipsis;
 }
 
+/* 原版卡图的插画带（裁剪自扫描图：约为卡高 14%–48% 的区域） */
+.zhface .zh_art {
+	flex: 0 0 auto;
+	height: 33%;
+	background-size: 116% auto;
+	background-position: center 21%;
+	background-repeat: no-repeat;
+	border-bottom: 1px solid rgba(122,102,60,0.4);
+	box-shadow: inset 0 0 0 1px rgba(122,102,60,0.18), inset 0 -8px 14px -10px rgba(60,44,20,0.5);
+	filter: sepia(0.12) contrast(1.02);
+}
+
 .zhface .zh_fx {
 	flex: 1 1 auto;
 	min-height: 0;
