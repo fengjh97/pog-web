@@ -1,2 +1,6 @@
 rl/data/
 rl/models/*.json
+rl2/models/
+rl2/league_*/
+rl2/train_*.log
+rl2/__pycache__/
