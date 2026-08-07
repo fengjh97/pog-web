@@ -252,6 +252,10 @@ body.hq-hand-open .panel-list {
 	background: transparent;
 	box-shadow: none;
 }
+/* 空面板（如未有战斗牌时）不显示光杆标题 */
+.panel-list .panel:has(.panel-body:empty) {
+	display: none;
+}
 .panel-list .panel-head {
 	font-family: var(--hq-serif);
 	font-size: 11px;
