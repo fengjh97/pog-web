@@ -5,9 +5,10 @@
  * All features are roughly [-1, 1] scaled. Perspective: positive = good for CP.
  */
 
-var data = (typeof module !== "undefined" && typeof require === "function")
-	? require("./data.js")
-	: window.data
+;(function (data) {
+
+if (!data)
+	data = require("./data.js")
 
 var PIECE_NATIONS = ["ge","ah","tu","bu","fr","br","ru","it","be","sb","mn","ro","gr","us","sn","ana"]
 var CP_NATIONS = { ge:1, ah:1, tu:1, bu:1 }
@@ -136,6 +137,21 @@ function extract(s) {
 	for (var vi = 0; vi < VP_SPACES.length; ++vi)
 		f.push(get_control_bit(s, VP_SPACES[vi]))
 
+	/* per-space signed combat factor (+ = CP), spatial resolution for tactics */
+	var space_cf = new Array(N_SPACES)
+	for (var sc = 0; sc < N_SPACES; ++sc)
+		space_cf[sc] = 0
+	for (var p2 = 1; p2 < data.pieces.length; ++p2) {
+		var loc2 = s.location[p2]
+		if (loc2 > 0 && loc2 < N_SPACES) {
+			var pc2 = data.pieces[p2]
+			var cf2 = reduced_set[p2] === 1 ? pc2.rcf : pc2.cf
+			space_cf[loc2] += pc2.faction === "cp" ? cf2 : -cf2
+		}
+	}
+	for (var sc2 = 1; sc2 < N_SPACES; ++sc2)
+		f.push(space_cf[sc2] / 12)
+
 	return f
 }
 
@@ -156,3 +172,5 @@ if (typeof module !== "undefined")
 	module.exports = { extract: extract, N_FEATURES: N_FEATURES, VP_SPACES: VP_SPACES }
 else
 	window.pog_features = { extract: extract, N_FEATURES: N_FEATURES }
+
+})(typeof module === "undefined" ? data : null)

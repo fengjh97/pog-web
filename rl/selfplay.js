@@ -39,11 +39,17 @@ function parse_args() {
 }
 
 function load_player(spec, eps) {
-	if (spec.startsWith("nn:")) {
-		const model = JSON.parse(fs.readFileSync(path.resolve(__dirname, spec.slice(3)), "utf8"))
-		return make_player("nn", { model, eps })
+	let rollout = true
+	if (spec.endsWith("0")) {
+		rollout = false
+		spec = spec.slice(0, -1)
 	}
-	return make_player(spec, { eps })
+	const m = /^(nnh?):(.+)$/.exec(spec)
+	if (m) {
+		const model = JSON.parse(fs.readFileSync(path.resolve(__dirname, m[2]), "utf8"))
+		return make_player(m[1], { model, eps, rollout })
+	}
+	return make_player(spec, { eps, rollout })
 }
 
 function game_result(s) {
@@ -110,7 +116,15 @@ function main() {
 	let cp_w = 0, ap_w = 0, draw = 0, unfinished = 0, total_steps = 0
 	const t0 = Date.now()
 	for (let g = 0; g < opt.games; ++g) {
-		const r = play_game(opt, players, opt.seed + g, out_stream)
+		let r
+		try {
+			r = play_game(opt, players, opt.seed + g, out_stream)
+		} catch (err) {
+			// rare engine edge case - skip the game rather than kill the worker
+			console.error(`game ${g + 1} crashed: ${err.message}`)
+			unfinished++
+			continue
+		}
 		total_steps += r.steps
 		if (!r.finished) unfinished++
 		if (r.z === 1) cp_w++

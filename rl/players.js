@@ -89,8 +89,66 @@ function make_player(kind, opts = {}) {
 		evalfn = heuristic_eval
 	else if (kind === "nn")
 		evalfn = nn_eval(opts.model)
+	else if (kind === "nnh") {
+		// blend: value net decides strategy, heuristic breaks near-ties (tactics)
+		const nn = nn_eval(opts.model)
+		evalfn = function (s) {
+			const v = nn(s)
+			if (v > 1e5 || v < -1e5) return v
+			return 1000 * v + 10 * Math.tanh(heuristic_eval(s) / 300)
+		}
+	}
 	else if (kind !== "random")
 		throw new Error("unknown player kind: " + kind)
+
+	const use_rollout = opts.rollout !== false && kind !== "random"
+
+	/* resolve pending combat consequences with cheap greedy play before evaluating:
+	 * declaring an attack is only a commitment - dice and losses come in later
+	 * actions, so a 1-step eval would judge attacks before anything happened. */
+	function resolve_combat(RULES, s) {
+		for (let depth = 0; depth < 14 && s.state !== "game_over" && s.attack; ++depth) {
+			let r = s.active
+			if (r === "Both" || r === "All") r = CP
+			let v = RULES.view(s, r)
+			let c = list_actions(v)
+			if (!c.length) {
+				r = (r === CP) ? AP : CP
+				v = RULES.view(s, r)
+				c = list_actions(v)
+				if (!c.length) break
+			}
+			let pick = c[0]
+			if (c.length > 1) {
+				// cheap inner greedy over a small sample
+				let inner = c
+				if (inner.length > 5) {
+					inner = c.slice()
+					for (let i = inner.length - 1; i > 0; --i) {
+						const j = (Math.random() * (i + 1)) | 0
+						;[inner[i], inner[j]] = [inner[j], inner[i]]
+					}
+					inner.length = 5
+				}
+				const rsign = r === CP ? 1 : -1
+				let bs = -Infinity
+				for (const ic of inner) {
+					let s2 = JSON.parse(JSON.stringify(s))
+					try {
+						s2 = RULES.action(s2, r, ic[0], ic[1])
+						const sc = rsign * heuristic_eval(s2)
+						if (sc > bs) { bs = sc; pick = ic }
+					} catch (e) {}
+				}
+			}
+			try {
+				s = RULES.action(s, r, pick[0], pick[1])
+			} catch (e) {
+				break
+			}
+		}
+		return s
+	}
 
 	return function choose(RULES, state, role, candidates) {
 		if (candidates.length === 1)
@@ -108,6 +166,7 @@ function make_player(kind, opts = {}) {
 			pool.length = max_pool
 		}
 
+		const in_combat = !!state.attack
 		const sign = role === CP ? 1 : -1
 		let best = null, best_score = -Infinity
 		for (const cand of pool) {
@@ -116,6 +175,8 @@ function make_player(kind, opts = {}) {
 			let score
 			try {
 				s = RULES.action(s, role, cand[0], cand[1])
+				if (use_rollout && (in_combat || s.attack))
+					s = resolve_combat(RULES, s)
 				score = sign * evalfn(s) + Math.random() * 1e-4
 			} catch (err) {
 				score = -Infinity

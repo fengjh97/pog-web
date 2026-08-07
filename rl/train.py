@@ -9,19 +9,25 @@ import numpy as np
 
 
 def load_data(paths):
-    X, Z = [], []
+    X, Z, val = [], [], []
     for p in paths:
+        rows = []
         with open(p) as fh:
             for line in fh:
                 line = line.strip()
                 if not line:
                     continue
                 o = json.loads(line)
-                X.append(o["f"])
-                Z.append(o["z"])
+                rows.append((o["f"], o["z"]))
+        cut = int(len(rows) * 0.9)
+        for i, (f, z) in enumerate(rows):
+            X.append(f)
+            Z.append(z)
+            val.append(i >= cut)
     X = np.asarray(X, dtype=np.float32)
     Z = np.asarray(Z, dtype=np.float32)
-    return X, Z
+    val = np.asarray(val, dtype=bool)
+    return X, Z, val
 
 
 def main():
@@ -32,23 +38,24 @@ def main():
     ap.add_argument("--epochs", type=int, default=60)
     ap.add_argument("--batch", type=int, default=512)
     ap.add_argument("--lr", type=float, default=1e-3)
+    ap.add_argument("--wd", type=float, default=1e-4)
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
     rng = np.random.default_rng(args.seed)
-    X, Z = load_data(args.data)
+    # per-file tail split: positions of one game are contiguous within a file,
+    # so file tails as validation avoid same-game train/val leakage
+    X, Z, val_mask = load_data(args.data)
     n = len(X)
-    print(f"samples: {n}, features: {X.shape[1]}, mean z: {Z.mean():.3f}")
+    print(f"samples: {n}, features: {X.shape[1]}, mean z: {Z.mean():.3f}, val: {val_mask.sum()}")
 
     mean = X.mean(0)
     std = X.std(0)
     std[std < 1e-6] = 1.0
     Xn = (X - mean) / std
 
-    idx = rng.permutation(n)
-    n_val = max(1000, n // 10)
-    val_i, tr_i = idx[:n_val], idx[n_val:]
-    Xtr, Ztr, Xva, Zva = Xn[tr_i], Z[tr_i], Xn[val_i], Z[val_i]
+    Xtr, Ztr = Xn[~val_mask], Z[~val_mask]
+    Xva, Zva = Xn[val_mask], Z[val_mask]
 
     sizes = [X.shape[1]] + args.hidden + [1]
     Ws = [rng.normal(0, np.sqrt(2.0 / sizes[i]), (sizes[i + 1], sizes[i])).astype(np.float32)
@@ -103,6 +110,7 @@ def main():
             t += 1
             lr_t = args.lr * np.sqrt(1 - b2 ** t) / (1 - b1 ** t)
             for i in range(len(Ws)):
+                grads_W[i] += args.wd * Ws[i]
                 mW[i] = b1 * mW[i] + (1 - b1) * grads_W[i]
                 vW[i] = b2 * vW[i] + (1 - b2) * grads_W[i] ** 2
                 Ws[i] -= lr_t * mW[i] / (np.sqrt(vW[i]) + eps)

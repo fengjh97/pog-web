@@ -314,8 +314,9 @@ function eval_state_dispatch(s) {
 			if (s.result === AP) return -1e6
 			return 0
 		}
-		// scale P(CP win) so terminal bonuses still dominate
-		return 1000 * window.nn_forward(nn_model, window.pog_features.extract(s))
+		// blend: value net decides strategy, heuristic breaks near-ties (tactics)
+		return 1000 * window.nn_forward(nn_model, window.pog_features.extract(s)) +
+			10 * Math.tanh(eval_state(s) / 300)
 	}
 	return eval_state(s)
 }
@@ -423,6 +424,7 @@ function ai_choose(candidates, role, v) {
 		pool.length = MAX_POOL
 	}
 
+	var in_combat = !!game.attack
 	var sign = (role === CP) ? 1 : -1
 	var best = null
 	var best_score = -Infinity
@@ -433,6 +435,10 @@ function ai_choose(candidates, role, v) {
 		var score
 		try {
 			s = RULES.action(s, role, pool[i][0], pool[i][1])
+			// resolve combat consequences before judging: declaring an attack
+			// is only a commitment - dice and losses come in later actions
+			if (in_combat || s.attack)
+				s = resolve_combat(s)
 			score = sign * eval_state_dispatch(s) + Math.random() * 0.25
 		} catch (err) {
 			score = -Infinity
@@ -443,6 +449,46 @@ function ai_choose(candidates, role, v) {
 		}
 	}
 	return best || candidates[0]
+}
+
+function resolve_combat(s) {
+	for (var depth = 0; depth < 14 && s.state !== "game_over" && s.attack; ++depth) {
+		var r = s.active
+		if (r === "Both" || r === "All") r = CP
+		var v = RULES.view(s, r)
+		var c = list_actions(v)
+		if (!c.length) {
+			r = (r === CP) ? AP : CP
+			v = RULES.view(s, r)
+			c = list_actions(v)
+			if (!c.length) break
+		}
+		var pick = c[0]
+		if (c.length > 1) {
+			var inner = c
+			if (inner.length > 5) {
+				inner = c.slice()
+				shuffle(inner)
+				inner.length = 5
+			}
+			var rsign = (r === CP) ? 1 : -1
+			var bs = -Infinity
+			for (var k = 0; k < inner.length; ++k) {
+				var s2 = clone_state(s)
+				try {
+					s2 = RULES.action(s2, r, inner[k][0], inner[k][1])
+					var sc = rsign * eval_state(s2)
+					if (sc > bs) { bs = sc; pick = inner[k] }
+				} catch (e) {}
+			}
+		}
+		try {
+			s = RULES.action(s, r, pick[0], pick[1])
+		} catch (e) {
+			break
+		}
+	}
+	return s
 }
 
 function shuffle(a) {
