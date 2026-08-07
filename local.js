@@ -1,0 +1,506 @@
+"use strict"
+
+/* Local single-player backend for the RTT client.
+ *
+ * Replaces window.WebSocket with an in-browser implementation that runs
+ * rules.js directly and speaks the same JSON message protocol as the RTT
+ * server. Supports play vs a built-in AI or hotseat (both sides).
+ */
+
+;(function () {
+
+var SAVE_KEY = "pog_local_save"
+var NOTE_KEY = "pog_local_note"
+
+var AP = "Allied Powers"
+var CP = "Central Powers"
+
+var RULES = null
+var DATA = null
+
+var game = null        // current rules state
+var snaps = []         // in-memory snapshot states for the replay panel
+var save_meta = null   // {ai_role, scenario, options, hotseat}
+
+/* ---------- CommonJS-in-browser loader (same trick as RTT replay.js) ---------- */
+
+var module_cache = {}
+
+function normalize_path(p) {
+	return p.replace(/^\.\//, "")
+}
+
+async function load_module(path) {
+	path = normalize_path(path)
+	if (module_cache[path])
+		return module_cache[path]
+	var res = await fetch(path)
+	if (!res.ok)
+		throw new Error("fetch failed: " + path)
+	var source = await res.text()
+	var mod = { exports: {} }
+	Function("module", "exports", "require", source)(mod, mod.exports, function (p) {
+		var m = module_cache[normalize_path(p)]
+		if (!m)
+			throw new Error("module not preloaded: " + p)
+		return m
+	})
+	module_cache[path] = mod.exports
+	return mod.exports
+}
+
+async function load_rules() {
+	DATA = await load_module("data.js")
+	await load_module("lz4.js")
+	RULES = await load_module("rules.js")
+}
+
+/* ---------- persistence ---------- */
+
+function save_game() {
+	try {
+		window.localStorage.setItem(SAVE_KEY, JSON.stringify({
+			version: 1,
+			meta: save_meta,
+			state: game,
+		}))
+	} catch (err) {
+		console.error("SAVE FAILED", err)
+	}
+}
+
+function load_save() {
+	try {
+		var text = window.localStorage.getItem(SAVE_KEY)
+		if (!text)
+			return null
+		var obj = JSON.parse(text)
+		if (obj && obj.version === 1 && obj.state)
+			return obj
+	} catch (err) {
+		console.error("LOAD FAILED", err)
+	}
+	return null
+}
+
+function clone_state(s) {
+	return JSON.parse(JSON.stringify(s))
+}
+
+/* ---------- the fake websocket ---------- */
+
+function LocalSocket(url) {
+	var self = this
+	self.readyState = 0
+	self.onopen = null
+	self.onclose = null
+	self.onmessage = null
+
+	var q = new URLSearchParams(url.split("?")[1] || "")
+	self.role = q.get("role") || AP
+
+	setTimeout(function () { self._init() }, 0)
+}
+
+LocalSocket.prototype._push = function (cmd, arg, extra) {
+	var self = this
+	var data = JSON.stringify(extra !== undefined ? [ cmd, arg, extra ] : [ cmd, arg ])
+	if (self.onmessage)
+		self.onmessage({ data: data })
+}
+
+LocalSocket.prototype._push_state = function () {
+	var self = this
+	var v = RULES.view(game, self.role)
+	v.log_start = 0
+	v.log = game.log
+	self._push("state", v, 1)
+	self._push("presence", present_roles())
+	if (game.state === "game_over" || game.state === "finished")
+		self._push("finished", null)
+}
+
+function present_roles() {
+	// both roles always "present" in a local game
+	return [ AP, CP ]
+}
+
+LocalSocket.prototype._init = async function () {
+	var self = this
+	try {
+		await load_rules()
+	} catch (err) {
+		console.error(err)
+		return
+	}
+
+	var page = new URLSearchParams(window.location.search)
+	var saved = load_save()
+
+	if (page.get("new") === "1" || !saved) {
+		var scenario = page.get("scenario") || "Historical"
+		if (!RULES.scenarios.includes(scenario))
+			scenario = RULES.scenarios[0]
+		var seed = parseInt(page.get("seed")) || ((Math.random() * 0x7fffffff) | 0)
+		var hotseat = page.get("hotseat") === "1"
+		save_meta = {
+			scenario: scenario,
+			options: {},
+			hotseat: hotseat,
+			ai_role: hotseat ? null : (self.role === AP ? CP : AP),
+		}
+		game = RULES.setup(seed, scenario, {})
+		snaps = []
+		save_game()
+		// strip new=1 so a refresh doesn't restart the game
+		page.delete("new")
+		page.delete("seed")
+		window.history.replaceState(null, "", window.location.pathname + "?" + page.toString())
+	} else {
+		save_meta = saved.meta
+		game = saved.state
+		snaps = []
+	}
+
+	self.readyState = 1
+	if (self.onopen)
+		self.onopen({})
+
+	var ai_name = "AI 将军" // AI 将军
+	var players = [
+		{ role: AP, name: save_meta.hotseat ? "热座" : (save_meta.ai_role === AP ? ai_name : "你") },
+		{ role: CP, name: save_meta.hotseat ? "热座" : (save_meta.ai_role === CP ? ai_name : "你") },
+	]
+	self._push("players", [ self.role, players, save_meta.scenario, save_meta.options, null ])
+	self._push("note", window.localStorage.getItem(NOTE_KEY) || "")
+	self._push_state()
+	self._push("snapsize", snaps.length)
+
+	self._maybe_hotseat_switch()
+	schedule_ai(self)
+}
+
+LocalSocket.prototype.send = function (text) {
+	var self = this
+	var msg = JSON.parse(text)
+	var cmd = msg[0]
+	var arg = msg[1]
+	try {
+		switch (cmd) {
+		case "action":
+			self._on_action(arg[0], arg[1])
+			break
+		case "query":
+			self._push("reply", [ arg[0], RULES.query(game, self.role, arg[0], arg[1]) ])
+			break
+		case "querysnap":
+			{
+				let s = snaps[arg[0] - 1]
+				if (s)
+					self._push("reply", [ arg[1], RULES.query(s, self.role, arg[1], arg[2]) ])
+			}
+			break
+		case "getsnap":
+			{
+				let s = snaps[arg - 1]
+				if (s) {
+					let v = RULES.view(s, self.role)
+					v.actions = null
+					v.log = s.log.length
+					self._push("snap", [ arg, s.active, v ])
+				} else {
+					self._push("nosnap", arg)
+				}
+			}
+			break
+		case "resign":
+			game = RULES.resign(game, self.role)
+			after_change(self)
+			break
+		case "putnote":
+			window.localStorage.setItem(NOTE_KEY, arg)
+			break
+		case "getchat":
+			break
+		}
+	} catch (err) {
+		console.error(err)
+		self._push("error", String(err))
+	}
+}
+
+LocalSocket.prototype.close = function () {
+	this.readyState = 3
+}
+
+LocalSocket.prototype._on_action = function (verb, noun) {
+	var self = this
+	var prev_active = game.active
+	game = RULES.action(game, self.role, verb, noun)
+	maybe_snapshot(prev_active)
+	after_change(self)
+}
+
+function maybe_snapshot(prev_active) {
+	if (game.active !== prev_active) {
+		if (typeof RULES.dont_snap === "function" && RULES.dont_snap(game))
+			return false
+		snaps.push(clone_state(game))
+		return true
+	}
+	return false
+}
+
+function after_change(sock) {
+	save_game()
+	sock._push_state()
+	sock._push("snapsize", snaps.length)
+	sock._maybe_hotseat_switch()
+	schedule_ai(sock)
+}
+
+/* ---------- hotseat: hand the seat to whichever side must act ---------- */
+
+LocalSocket.prototype._maybe_hotseat_switch = function () {
+	var self = this
+	if (!save_meta || !save_meta.hotseat)
+		return
+	if (game.state === "game_over")
+		return
+	var active = game.active
+	if (active === self.role || active === "Both" || active === "All")
+		return
+	if (active === AP || active === CP) {
+		self.role = active
+		var players = [
+			{ role: AP, name: "热座" },
+			{ role: CP, name: "热座" },
+		]
+		self._push("pie", [ self.role, players ])
+		self._push_state()
+	}
+}
+
+/* ---------- AI ---------- */
+
+var ai_timer = null
+
+function role_is_active(role) {
+	return game.active === role || game.active === "Both" || game.active === "All"
+}
+
+function schedule_ai(sock) {
+	if (!save_meta || save_meta.hotseat || !save_meta.ai_role)
+		return
+	if (game.state === "game_over")
+		return
+	if (!role_is_active(save_meta.ai_role))
+		return
+	if (ai_timer)
+		return
+	ai_timer = setTimeout(function () {
+		ai_timer = null
+		ai_step(sock)
+	}, 150)
+}
+
+function ai_step(sock) {
+	var role = save_meta.ai_role
+	if (game.state === "game_over" || !role_is_active(role))
+		return
+
+	var prev_active = game.active
+	var acted = false
+	var quick = 0
+
+	// run consecutive decisions; push a UI update between "interesting" ones
+	while (game.state !== "game_over" && role_is_active(role) && quick < 100) {
+		var v = RULES.view(game, role)
+		var candidates = list_actions(v)
+		if (candidates.length === 0)
+			break
+		var choice
+		if (candidates.length === 1)
+			choice = candidates[0]
+		else
+			choice = ai_choose(candidates, role, v)
+		game = RULES.action(game, role, choice[0], choice[1])
+		maybe_snapshot(prev_active)
+		prev_active = game.active
+		acted = true
+		quick++
+		// yield to UI after multi-option decisions so the player can follow along
+		if (candidates.length > 1)
+			break
+	}
+
+	if (acted)
+		after_change(sock)
+	else if (role_is_active(role) && game.state !== "game_over")
+		console.error("AI stuck: no actions available", game.state)
+}
+
+function list_actions(v) {
+	var out = []
+	if (!v.actions)
+		return out
+	for (var verb in v.actions) {
+		// meta/bookkeeping actions the AI must never take
+		if (verb === "undo" || verb === "resign" ||
+			verb === "propose_rollback" || verb === "flag_supply_warnings")
+			continue
+		var val = v.actions[verb]
+		if (val === 0 || val === false || val === null || val === undefined)
+			continue
+		if (Array.isArray(val)) {
+			for (var i = 0; i < val.length; ++i)
+				out.push([ verb, val[i] ])
+		} else if (val === 1 || val === true) {
+			out.push([ verb, undefined ])
+		} else {
+			out.push([ verb, val ])
+		}
+	}
+	return out
+}
+
+function ai_choose(candidates, role, v) {
+	// special case: always accept rollback proposals in a solo game
+	if (v.prompt && /rollback/i.test(v.prompt)) {
+		for (var i = 0; i < candidates.length; ++i)
+			if (candidates[i][0] === "accept")
+				return candidates[i]
+	}
+
+	// cap the number of scored candidates to bound think time
+	var pool = candidates
+	var MAX_POOL = 36
+	if (pool.length > MAX_POOL) {
+		pool = candidates.slice(0)
+		shuffle(pool)
+		pool.length = MAX_POOL
+	}
+
+	var sign = (role === CP) ? 1 : -1
+	var best = null
+	var best_score = -Infinity
+	for (var i = 0; i < pool.length; ++i) {
+		var s = clone_state(game)
+		// re-seed so the AI cannot foresee its dice rolls
+		s.seed = (Math.random() * 0x7fffffff) | 0
+		var score
+		try {
+			s = RULES.action(s, role, pool[i][0], pool[i][1])
+			score = sign * eval_state(s) + Math.random() * 0.25
+		} catch (err) {
+			score = -Infinity
+		}
+		if (score > best_score) {
+			best_score = score
+			best = pool[i]
+		}
+	}
+	return best || candidates[0]
+}
+
+function shuffle(a) {
+	for (var i = a.length - 1; i > 0; --i) {
+		var j = (Math.random() * (i + 1)) | 0
+		var t = a[i]; a[i] = a[j]; a[j] = t
+	}
+}
+
+/* Evaluate a state from the Central Powers' perspective (higher = better for CP). */
+function eval_state(s) {
+	if (s.state === "game_over") {
+		if (s.result === CP) return 1e6
+		if (s.result === AP) return -1e6
+		return 0
+	}
+
+	var score = 0
+
+	// VP track is the core signal (CP wins high, AP wins low)
+	score += 100 * s.vp
+
+	// material: sum combat factors of on-map units
+	var pieces = DATA.pieces
+	var nspaces = DATA.spaces.length
+	var reduced = s.reduced || []
+	var cp_str = 0, ap_str = 0
+	for (var p = 1; p < pieces.length; ++p) {
+		var loc = s.location[p]
+		if (loc > 0 && loc < nspaces) {
+			var pc = pieces[p]
+			var is_reduced = reduced.includes(p)
+			var cf = is_reduced ? pc.rcf : pc.cf
+			if (pc.faction === "cp") cp_str += cf
+			else ap_str += cf
+		}
+	}
+	score += 2 * (cp_str - ap_str)
+
+	// war status advantage
+	if (s.cp && s.ap)
+		score += 3 * ((s.cp.ws || 0) - (s.ap.ws || 0))
+
+	// track pressure
+	score += 8 * (s.russian_capitulation || 0)
+	score -= 6 * (s.us_entry || 0)
+
+	// out-of-supply pieces are bad for their owner
+	var oos = s.oos_pieces || []
+	for (var k = 0; k < oos.length; ++k) {
+		var op = pieces[oos[k]]
+		if (op) {
+			if (op.faction === "cp") score -= 12
+			else score += 12
+		}
+	}
+
+	// replacement point reserves (small)
+	if (s.rp) {
+		score += 1.5 * ((s.rp.ge || 0) + (s.rp.ah || 0) + (s.rp.tu || 0) + (s.rp.bu || 0))
+		score -= 1.5 * ((s.rp.fr || 0) + (s.rp.br || 0) + (s.rp.ru || 0) + (s.rp.it || 0) + (s.rp.us || 0) + (s.rp.allied || 0))
+	}
+
+	return score
+}
+
+/* ---------- install ---------- */
+
+// Only hijack WebSocket on pages served without a real game server.
+window.WebSocket = LocalSocket
+
+/* ---------- self-test: drive the player side through the real UI action path ---------- */
+
+if (new URLSearchParams(window.location.search).get("autotest") === "1") {
+	setInterval(function () {
+		try {
+			if (typeof view === "undefined" || !view || !view.actions)
+				return
+			var picks = []
+			for (var verb in view.actions) {
+				if (verb === "undo" || verb === "resign" ||
+					verb === "propose_rollback" || verb === "flag_supply_warnings")
+					continue
+				var val = view.actions[verb]
+				if (val === 0 || val === false || val === null || val === undefined)
+					continue
+				if (Array.isArray(val))
+					for (var i = 0; i < val.length; ++i) picks.push([ verb, val[i] ])
+				else
+					picks.push([ verb, undefined ])
+			}
+			if (picks.length && typeof send_action === "function") {
+				var p = picks[(Math.random() * picks.length) | 0]
+				console.log("AUTOTEST", p[0], p[1])
+				send_action(p[0], p[1])
+			}
+		} catch (e) {
+			console.error("AUTOTEST ERROR", e)
+		}
+	}, 300)
+}
+
+})()

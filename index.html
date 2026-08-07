@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>光荣之路 · Paths of Glory 单机版</title>
+<link rel="icon" href="favicon.png">
+<style>
+	html { box-sizing: border-box; }
+	*, *:before, *:after { box-sizing: inherit; }
+	body {
+		margin: 0; min-height: 100vh;
+		display: flex; align-items: center; justify-content: center;
+		background: #3b3a37 url(map75.jpg) center/cover no-repeat fixed;
+		font-family: "Source Serif", Georgia, "Songti SC", serif;
+	}
+	body::before {
+		content: ""; position: fixed; inset: 0;
+		background: rgba(30,28,24,0.72);
+	}
+	.card {
+		position: relative; z-index: 1;
+		width: min(92vw, 430px);
+		background: #f3ead8; color: #26221c;
+		border: 2px solid #6b5b3e; border-radius: 6px;
+		box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+		padding: 28px 30px 24px;
+	}
+	h1 { margin: 0 0 2px; font-size: 30px; letter-spacing: 2px; }
+	.sub { margin: 0 0 18px; color: #6b5b3e; font-size: 13px; letter-spacing: 1px; }
+	fieldset { border: 1px solid #c9b998; border-radius: 4px; margin: 0 0 14px; padding: 10px 14px 12px; }
+	legend { font-size: 13px; color: #6b5b3e; padding: 0 6px; }
+	label { display: inline-flex; align-items: center; gap: 6px; margin-right: 16px; font-size: 15px; cursor: pointer; }
+	button {
+		display: block; width: 100%; margin-top: 10px; padding: 11px 0;
+		font-family: inherit; font-size: 17px; letter-spacing: 3px; cursor: pointer;
+		background: #4a5a3a; color: #f3ead8; border: 1px solid #33402a; border-radius: 4px;
+	}
+	button:hover { background: #55693f; }
+	button.secondary { background: #8a7a55; border-color: #6b5b3e; letter-spacing: 1px; font-size: 15px; padding: 9px 0; }
+	button.secondary:hover { background: #99885f; }
+	button[disabled] { opacity: 0.45; cursor: default; }
+	.note { margin-top: 14px; font-size: 12px; color: #6b5b3e; line-height: 1.6; }
+</style>
+</head>
+<body>
+<div class="card">
+	<h1>光荣之路</h1>
+	<p class="sub">PATHS OF GLORY — 第一次世界大战 1914–1918 · 单机版</p>
+
+	<fieldset>
+		<legend>你的阵营</legend>
+		<label><input type="radio" name="side" value="Allied Powers" checked> 协约国</label>
+		<label><input type="radio" name="side" value="Central Powers"> 同盟国</label>
+		<label><input type="radio" name="side" value="hotseat"> 热座（双方都由你操作）</label>
+	</fieldset>
+
+	<fieldset>
+		<legend>剧本</legend>
+		<label><input type="radio" name="scenario" value="Historical" checked> 历史剧本</label>
+		<label><input type="radio" name="scenario" value="The Great War"> 大战剧本</label>
+	</fieldset>
+
+	<button onclick="start_new()">开 始 新 游 戏</button>
+	<button id="continue" class="secondary" onclick="continue_game()" disabled>继续上次的游戏</button>
+
+	<p class="note">
+		对手为内置 AI（启发式搜索，业余水平）。规则由引擎自动裁判，支持撤销与回放。<br>
+		规则实现与美术素材 © GMT Games；引擎源码 © Nathan Forget &amp; Tor Andersson (Rally the Troops)。仅供个人学习娱乐，请支持实体版。
+	</p>
+</div>
+<script>
+function get(name) {
+	return document.querySelector('input[name="' + name + '"]:checked').value
+}
+function start_new() {
+	var side = get("side")
+	var q = new URLSearchParams()
+	q.set("game", "local")
+	q.set("new", "1")
+	q.set("scenario", get("scenario"))
+	if (side === "hotseat") {
+		q.set("hotseat", "1")
+		q.set("role", "Allied Powers")
+	} else {
+		q.set("role", side)
+	}
+	if (!localStorage.getItem("pog_local_save") || confirm("会覆盖已有的存档，确定开新局吗？"))
+		location.href = "play.html?" + q.toString()
+}
+function continue_game() {
+	try {
+		var save = JSON.parse(localStorage.getItem("pog_local_save"))
+		var q = new URLSearchParams()
+		q.set("game", "local")
+		if (save.meta.hotseat) {
+			q.set("hotseat", "1")
+			q.set("role", save.state.active === "Central Powers" ? "Central Powers" : "Allied Powers")
+		} else {
+			q.set("role", save.meta.ai_role === "Allied Powers" ? "Central Powers" : "Allied Powers")
+		}
+		location.href = "play.html?" + q.toString()
+	} catch (e) {
+		alert("没有可用的存档")
+	}
+}
+if (localStorage.getItem("pog_local_save"))
+	document.getElementById("continue").disabled = false
+</script>
+</body>
+</html>

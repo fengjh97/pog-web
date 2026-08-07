@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<!-- vim:set nowrap: -->
+<html lang="zh-CN">
+<head>
+	<meta name="viewport" content="width=device-width, height=device-height, user-scalable=no, interactive-widget=resizes-content, viewport-fit=content, viewport-fit=cover">
+	<meta name="theme-color" content="#444">
+	<meta charset="UTF-8">
+	<title>光荣之路 PATHS OF GLORY</title>
+	<link rel="icon" href="favicon.png">
+	<link rel="stylesheet" href="fonts/fonts.css">
+	<link rel="stylesheet" href="common/client.css">
+	<link rel="stylesheet" href="play.css">
+	<link rel="stylesheet" href="images.css">
+	<link rel="stylesheet" href="colors.css">
+	<script defer src="local.js"></script>
+	<script defer src="common/client.js"></script>
+	<script defer src="data.js"></script>
+	<script defer src="layout.js"></script>
+	<script defer src="play.js"></script>
+	<script defer src="zh.js"></script>
+</head>
+<body class="bevel">
+
+<menu id="card_popup" hidden>
+	<li class="title">卡牌
+	<li class="separator">
+	<li data-action="play_event"> &#x1f3b4;&#xfe0e; &nbsp; 打出事件
+	<li data-action="play_ops"> &#x1f500;&#xfe0e; &nbsp; 用作行动 (OPS)
+	<li data-action="play_sr"> &#x1f682;&#xfe0e; &nbsp; 战略调动 (SR)
+	<li data-action="play_rps"> &#x1f3ed;&#xfe0e; &nbsp; 补充点数 (RP)
+</menu>
+
+<menu id="activation_popup" hidden>
+	<li class="title">激活
+	<li class="separator">
+	<li data-action="activate_move"> 激活以移动
+	<li data-action="activate_attack"> 激活以进攻
+	<li data-action="activate_attack_mutiny"> 激活以进攻（法军兵变）
+</menu>
+
+<div id="score" class="dialog" hidden>
+	<div class="dialog_header">战分总览</div>
+	<div class="dialog_x" onclick="hide_dialog('score')">&#x274c;</div>
+	<div class="dialog_body"></div>
+</div>
+
+<div id="cp_card_dialog" class="dialog" hidden>
+	<div class="dialog_header">同盟国卡牌</div>
+	<div class="dialog_x" onclick="hide_dialog('cp_card_dialog')">&#x274c;</div>
+	<div class="dialog_body"></div>
+</div>
+
+<div id="ap_card_dialog" class="dialog" hidden>
+	<div class="dialog_header">协约国卡牌</div>
+	<div class="dialog_x" onclick="hide_dialog('ap_card_dialog')">&#x274c;</div>
+	<div class="dialog_body"></div>
+</div>
+
+<header>
+	<div id="toolbar">
+		<details>
+			<summary><img src="images/cog.svg"></summary>
+			<menu>
+				<li><a href="info/rules.html" target="_blank">规则（英文）</a>
+				<li><a href="info/pac.html" target="_blank">图表</a>
+				<li><a href="info/cards_ap.html" target="_blank">协约国牌表</a>
+				<li><a href="info/cards_cp.html" target="_blank">同盟国牌表</a>
+				<li class="separator">
+				<li><a href="index.html">返回首页</a>
+			</menu>
+		</details>
+		<details id="stack_menu">
+			<summary><img src="images/stack.svg"></summary>
+			<menu>
+				<li class="unchecked" id="mouse_focus" onclick="set_mouse_focus()"> 鼠标聚焦
+				<li class="separator">
+				<li class="unchecked" id="style_bevel" onclick="set_style('bevel')"> 立体棋子
+				<li class="unchecked" id="style_flat" onclick="set_style('flat')"> 扁平棋子
+			</menu>
+		</details>
+		<details id="info_menu">
+			<summary><img src="images/wooden-sign.svg"></summary>
+			<menu>
+				<li onclick="show_score_summary()"> 战分总览
+				<li class="separator">
+				<li onclick="send_query('cp_cards')"> 查看同盟国卡牌
+				<li onclick="send_query('ap_cards')"> 查看协约国卡牌
+				<li class="separator">
+				<li class="reinforcements" onclick="to_reinforcements()"> 查看增援
+			</menu>
+		</details>
+		<details id="supply_menu">
+			<summary><img src="images/oil-drum.svg"></summary>
+			<menu>
+				<li onclick="flag_supply_warnings()" id="flag_supply_warning_menu"> 标记补给警告
+				<li onclick="propose_rollback()" id="propose_rollback_menu"> 提议回滚
+				<li class="separator">
+				<li onclick="send_query('cp_supply')"> 显示同盟国补给
+				<li onclick="send_query('eastern_ap_supply')"> 显示东线协约国补给
+				<li onclick="send_query('western_ap_supply')"> 显示西线协约国补给
+				<li onclick="send_query('mef_supply')"> 显示地中海远征军补给
+			</menu>
+		</details>
+		<button id="piece_button" onclick="toggle_counters()"><img src="images/earth-america.svg"></button>
+	</div>
+</header>
+
+<aside>
+	<div id="roles">
+		<div class="role" id="role_Allied_Powers">
+			<div class="role_name">协约国 Allied Powers</div>
+			<div class="role_stat" id="ap_hand"></div>
+			<div class="role_user">-</div>
+		</div>
+		<div class="role" id="role_Central_Powers">
+			<div class="role_name">同盟国 Central Powers</div>
+			<div class="role_stat" id="cp_hand"></div>
+			<div class="role_user">-</div>
+		</div>
+	</div>
+	<div id="turn_info">
+		<div id="ap_deck_size" onclick="send_query('ap_cards')"></div>
+		<div id="cp_deck_size" onclick="send_query('cp_cards')"></div>
+		<div id="violations"></div>
+	</div>
+	<div id="log"></div>
+</aside>
+
+<div id="tooltip" hidden></div>
+
+<main data-max-zoom="2" onclick="hide_popup_menu()">
+	<div id="mapwrap">
+		<div id="map">
+			<div id="spaces"></div>
+			<div id="markers">
+				<div class="marker neutral it" id="neutral_it"></div>
+				<div class="marker neutral bu" id="neutral_bu"></div>
+				<div class="marker neutral gr" id="neutral_gr"></div>
+				<div class="marker neutral ro" id="neutral_ro"></div>
+				<div class="marker neutral tu" id="neutral_tu"></div>
+				<div id="ne_limit_markers">
+					<div class="marker ne_limit br_ne_sr"></div>
+					<div class="marker ne_limit cp_ne_sr"></div>
+					<div class="marker ne_limit ru_ne_sr"></div>
+					<div class="marker ne_limit ru_ne_move"></div>
+				</div>
+			</div>
+			<div id="pieces">
+				<div id="focus" class="hide"></div>
+			</div>
+		</div>
+	</div>
+
+	<div class="panel-list">
+
+		<div id="cc-list" class="hide">
+
+			<div class="panel">
+				<div class="panel-head">战斗牌</div>
+				<div class="panel-body" id="combat_cards"></div>
+			</div>
+
+			<div class="panel">
+				<div class="panel-head">未使用的战斗牌</div>
+				<div class="panel-body" id="unused_combat_cards"></div>
+			</div>
+
+		</div>
+
+		<div class="panel">
+			<div class="panel-head">手牌</div>
+			<div class="panel-body" id="cards"></div>
+		</div>
+		<div id="active_card_zone" class="hide">
+			<div class="panel">
+				<div class="panel-head">生效中的卡牌</div>
+				<div class="panel-body" id="active_cards"></div>
+			</div>
+		</div>
+
+		<div id="reinforcements_wrap">
+			<div id="reinforcements"></div>
+		</div>
+	</div>
+</main>
+
+<footer id="status"></footer>
+
+<dialog id="propose_rollback_dialog" class="modal-dialog">
+	<h3>提议回滚</h3>
+	<p>为修正漏掉的补给警告，可能需要把游戏回滚到较早的行动轮。</p>
+	<p>本地对 AI 模式下，回滚会立即生效。</p>
+	<p>此操作无法撤销。</p>
+	<form id="propose_rollback_form">
+		<label for="rollback_checkpoint">回滚到：</label>
+		<br>
+		<select name="checkpoint" id="rollback_checkpoint" onchange="update_rollback_dialog()">
+		</select>
+	</form>
+	<div id="propose_rollback_details"></div>
+	<div class="rollback_buttons">
+		<button onclick="propose_rollback_cancel(event)">取消</button>
+		<button onclick="propose_rollback_submit(event)">确定</button>
+	</div>
+</dialog>
+
+<dialog id="review_rollback_dialog" class="modal-dialog">
+	<h3>审核回滚提议</h3>
+	<p>对手提议回滚到较早的行动轮。</p>
+	<p>请审阅下面的细节并选择接受或拒绝。</p>
+	<div id="review_rollback_details"></div>
+	<div class="rollback_buttons">
+		<button onclick="review_rollback_cancel(event)">取消</button>
+		<button onclick="review_rollback_accept(event)">接受</button>
+		<button onclick="review_rollback_reject(event)">拒绝</button>
+	</div>
+</dialog>
+
+</body>
+</html>
