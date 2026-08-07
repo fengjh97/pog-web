@@ -164,6 +164,7 @@ LocalSocket.prototype._init = async function () {
 	}
 
 	self.readyState = 1
+	active_socket = self
 	if (self.onopen)
 		self.onopen({})
 
@@ -553,6 +554,36 @@ function eval_state(s) {
 	}
 
 	return score
+}
+
+/* ---------- 参谋接口：为玩家一侧计算建议着法 ---------- */
+
+var active_socket = null
+
+window.pog_suggest = function () {
+	if (!RULES || !game || !active_socket)
+		return null
+	var role = active_socket.role
+	if (game.state === "game_over")
+		return { over: true }
+	if (!(game.active === role || game.active === "Both" || game.active === "All"))
+		return { waiting: true }
+	var v = RULES.view(game, role)
+	var cands = list_actions(v)
+	if (cands.length === 0)
+		return { waiting: true }
+	var pick = cands.length === 1 ? cands[0] : ai_choose(cands, role, v)
+	return {
+		verb: pick[0],
+		noun: pick[1],
+		n_options: cands.length,
+		prompt: v.prompt,
+		actions: v.actions ? Object.keys(v.actions) : [],
+	}
+}
+
+window.pog_player_role = function () {
+	return active_socket ? active_socket.role : null
 }
 
 /* ---------- install ---------- */
