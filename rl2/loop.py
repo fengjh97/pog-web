@@ -12,15 +12,15 @@ import ppo
 HERE = os.path.dirname(os.path.abspath(__file__))
 NODE = "node"
 
-GAMES_PER_ITER = 96
+GAMES_PER_ITER = 96  # overridden by --games-per-iter
 WORKERS = 6
 LEAGUE_EVERY = 8
 PROBE_EVERY = 8
 PROBE_GAMES = 24
 
 
-def run_workers(model_json, league_dir, iter_no, tag):
-    per = GAMES_PER_ITER // WORKERS
+def run_workers(model_json, league_dir, iter_no, tag, games_per_iter, max_turn):
+    per = games_per_iter // WORKERS
     procs, files = [], []
     for w in range(WORKERS):
         out = f"/tmp/rl2-{tag}-{w}.jsonl"
@@ -31,6 +31,7 @@ def run_workers(model_json, league_dir, iter_no, tag):
             [NODE, os.path.join(HERE, "rollout.js"),
              "--games", str(per), "--model", model_json,
              "--league", league_dir, "--out", out,
+             "--max-turn", str(max_turn),
              "--seed", str(iter_no * 100000 + w * 1000)],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
     for p in procs:
@@ -38,10 +39,11 @@ def run_workers(model_json, league_dir, iter_no, tag):
     return files
 
 
-def probe(model_json, tag, search=False):
+def probe(model_json, tag, max_turn=3, search=False):
     cmd = [NODE, os.path.join(HERE, "rollout.js"), "--arena",
            "--games", str(PROBE_GAMES), "--model", model_json,
-           "--opp", "heuristic", "--seed", str(int(time.time()) % 100000)]
+           "--opp", "heuristic", "--max-turn", str(max_turn),
+           "--seed", str(int(time.time()) % 100000)]
     if search:
         cmd.append("--search")
     try:
@@ -53,19 +55,27 @@ def probe(model_json, tag, search=False):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--arm", choices=["A", "B", "C"], required=True)
+    ap.add_argument("--arm", choices=["A", "B", "C", "Csg"], required=True)
     ap.add_argument("--minutes", type=float, default=90)
     ap.add_argument("--tag", required=True)
     ap.add_argument("--lr", type=float, default=3e-4)
+    ap.add_argument("--max-turn", type=int, default=3)
+    ap.add_argument("--games-per-iter", type=int, default=96)
+    ap.add_argument("--init", default=None, help="warm-start .pt checkpoint")
     args = ap.parse_args()
 
     torch.manual_seed(7)
     torch.set_num_threads(6)
-    use_gru = args.arm in ("B", "C")
-    use_belief = args.arm == "C"
-    policy = Policy(use_gru, use_belief)
+    use_gru = args.arm in ("B", "C", "Csg")
+    use_belief = args.arm in ("C", "Csg")
+    policy = Policy(use_gru, use_belief, belief_sg=args.arm == "Csg")
     critic = Critic()
     opt = torch.optim.Adam(list(policy.parameters()) + list(critic.parameters()), lr=args.lr)
+    if args.init:
+        ck = torch.load(args.init, weights_only=True)
+        policy.load_state_dict(ck["policy"], strict=False)
+        critic.load_state_dict(ck["critic"])
+        print(f"warm-started from {args.init} (iter {ck.get('iter')})")
 
     mdir = os.path.join(HERE, "models")
     league = os.path.join(HERE, "league_" + args.tag)
@@ -85,7 +95,7 @@ def main():
     mean_R = []
     while (time.time() - t0) / 60 < args.minutes:
         it += 1
-        files = run_workers(cur, league, it, args.tag)
+        files = run_workers(cur, league, it, args.tag, args.games_per_iter, args.max_turn)
         eps = ppo.load_episodes(files)
         # track mean self-play reward of recorded sides (should hover near 0 in mirror play)
         zs = [e["z"] for e in eps]
@@ -103,7 +113,7 @@ def main():
                         "opt": opt.state_dict(), "iter": it},
                        os.path.join(mdir, f"{args.tag}_train.pt"))
         if it % PROBE_EVERY == 0:
-            pr = probe(cur, args.tag)
+            pr = probe(cur, args.tag, args.max_turn)
             log(f"PROBE iter {it} vs heuristic: {pr}")
     torch.save({"policy": policy.state_dict(), "critic": critic.state_dict(),
                 "opt": opt.state_dict(), "iter": it},

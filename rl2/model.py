@@ -20,10 +20,11 @@ POL_H = 64
 
 
 class Policy(nn.Module):
-    def __init__(self, use_gru: bool, use_belief: bool):
+    def __init__(self, use_gru: bool, use_belief: bool, belief_sg: bool = False):
         super().__init__()
         self.use_gru = use_gru
         self.use_belief = use_belief
+        self.belief_sg = belief_sg
         self.enc1 = nn.Linear(OBS_DIM, ENC_H)
         self.enc2 = nn.Linear(ENC_H, REP_H)
         if use_gru:

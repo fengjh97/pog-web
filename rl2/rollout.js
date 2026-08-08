@@ -21,8 +21,8 @@ const F = require(path.join(ROOT, "features.js"))
 const { policy_step, softmax_sample, new_hidden } = require("./jsnn.js")
 const { list_actions, heuristic_eval, AP, CP } = require(path.join(ROOT, "rl", "players.js"))
 
-const MAX_TURN = 3        // truncate after this turn completes (1914 campaign)
-const MAX_STEPS = 4000
+let MAX_TURN = 3          // overridable via --max-turn
+let MAX_STEPS = 4000
 const MAX_CANDS = 16
 const N_STATE = F.N_FEATURES   // 537
 const OBS_DIM = N_STATE + 65 + 1
@@ -282,6 +282,7 @@ function parse() {
 		else if (k === "--temp") o.temp = +a[++i]
 		else if (k === "--arena") o.arena = true
 		else if (k === "--search") o.search = true
+		else if (k === "--max-turn") { MAX_TURN = +a[++i]; MAX_STEPS = 1000 * MAX_TURN + 3000 }
 	}
 	return o
 }

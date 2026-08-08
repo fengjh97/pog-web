@@ -88,7 +88,8 @@ def update(policy: Policy, critic: Critic, opt, episodes, device="cpu"):
             loss = pg + VF_COEF * vf - ENT_COEF * ent
             bel = torch.tensor(0.0)
             if policy.use_belief:
-                bel = Fn.binary_cross_entropy_with_logits(policy.belief(h), priv)
+                h_bel = h.detach() if getattr(policy, "belief_sg", False) else h
+                bel = Fn.binary_cross_entropy_with_logits(policy.belief(h_bel), priv)
                 loss = loss + BELIEF_COEF * bel
             opt.zero_grad()
             loss.backward()
