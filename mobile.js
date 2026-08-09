@@ -8,7 +8,7 @@
 ;(function () {
 
 var MOBILE_MQ = window.matchMedia("(max-width: 800px)")
-var TUTORIAL_KEY = "pog_tutorial_complete_v1"
+var TUTORIAL_KEY = "pog_academy_complete_v2"
 var MAP_FIT_KEY = "pog_map_fit_default_v1"
 var SHEET_NAMES = [ "map", "hand", "actions", "data", "log" ]
 var active_sheet = null
@@ -163,7 +163,7 @@ function build_shell() {
 	dock.appendChild(actions)
 	dock.appendChild(dock_button("hq_data_btn", "◫", "战况", "STATUS", "data"))
 	dock.appendChild(dock_button("hq_log_btn", "≡", "战报", "LOG", "log"))
-	var help = dock_button("hq_help_btn", "?", "教程", "HELP", "")
+	var help = dock_button("hq_help_btn", "?", "军校", "LEARN", "")
 	help.addEventListener("click", begin_tutorial)
 	dock.appendChild(help)
 
@@ -569,6 +569,10 @@ function bind_tutorial() {
 }
 
 function begin_tutorial() {
+	if (window.POG_ACADEMY && typeof window.POG_ACADEMY.open === "function") {
+		window.POG_ACADEMY.open()
+		return
+	}
 	tutorial_step = 0
 	$("#hq_tutorial").hidden = false
 	document.body.classList.add("hq-tutorial-open")

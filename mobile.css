@@ -738,6 +738,128 @@ body.pog-modern-ui #mapwrap {
 	padding: 13px;
 }
 
+#hq_advisor_host #hq_advisor .adv_coach {
+	grid-column: 1 / -1;
+	overflow: hidden;
+	background: linear-gradient(135deg, rgba(143,52,40,0.26), rgba(205,169,84,0.07));
+	border: 1px solid rgba(221,181,91,0.32);
+	border-radius: 12px;
+}
+
+#hq_advisor_host #hq_advisor .adv_coach_head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	min-height: 31px;
+	padding: 0 10px;
+	font-size: 9px;
+	font-weight: 900;
+	letter-spacing: 0.16em;
+	color: #e1bf72;
+	background: rgba(0,0,0,0.18);
+	border-bottom: 1px solid rgba(221,181,91,0.16);
+}
+
+#hq_advisor_host #hq_advisor .adv_coach_toggle {
+	padding: 3px 6px;
+	font-size: 9px;
+	color: #bdb49e;
+	background: transparent;
+	border: 1px solid rgba(221,181,91,0.27);
+	border-radius: 5px;
+}
+
+#hq_advisor_host #hq_advisor .adv_coach_content {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(210px, 0.55fr);
+	gap: 4px 15px;
+	padding: 12px;
+}
+
+#hq_advisor_host #hq_advisor .adv_coach_content > small {
+	grid-column: 1;
+	font-size: 8px;
+	font-weight: 900;
+	letter-spacing: 0.15em;
+	color: #bb9270;
+}
+
+#hq_advisor_host #hq_advisor .adv_coach_title {
+	grid-column: 1;
+	display: block;
+	font-family: var(--hq-serif);
+	font-size: 18px;
+	color: #f5e7c9;
+}
+
+#hq_advisor_host #hq_advisor .adv_coach_action {
+	grid-column: 1;
+	margin: 3px 0 0;
+	font-family: var(--hq-sans);
+	font-size: 13px;
+	font-weight: 690;
+	line-height: 1.55;
+	color: #e3d4b7;
+}
+
+#hq_advisor_host #hq_advisor .adv_coach_done {
+	grid-column: 2;
+	grid-row: 1 / 4;
+	align-self: stretch;
+	box-sizing: border-box;
+	padding: 9px 10px;
+	background: rgba(0,0,0,0.17);
+	border-left: 2px solid #748a59;
+	border-radius: 0 8px 8px 0;
+}
+
+#hq_advisor_host #hq_advisor .adv_coach_done span {
+	font-size: 8px;
+	font-weight: 900;
+	letter-spacing: 0.12em;
+	color: #a9bb8f;
+}
+
+#hq_advisor_host #hq_advisor .adv_coach_done p {
+	margin: 5px 0 0;
+	font-family: var(--hq-sans);
+	font-size: 10.5px;
+	line-height: 1.5;
+	color: #aaa998;
+}
+
+#hq_advisor_host #hq_advisor .adv_coach_buttons {
+	grid-column: 1 / -1;
+	display: flex;
+	gap: 8px;
+	margin-top: 8px;
+}
+
+#hq_advisor_host #hq_advisor .adv_coach_buttons button {
+	min-height: 35px;
+	padding: 7px 11px;
+	font-size: 10px;
+	font-weight: 800;
+	color: #e7dcc2;
+	background: #303a32;
+	border: 1px solid #68745e;
+	border-radius: 8px;
+}
+
+#hq_advisor_host #hq_advisor .adv_school {
+	color: #b6ad9b !important;
+	background: transparent !important;
+	border-color: rgba(221,181,91,0.22) !important;
+}
+
+#hq_advisor_host #hq_advisor.coach-off .adv_coach_content {
+	display: none;
+}
+
+#hq_advisor_host #hq_advisor.coach-off .adv_coach_head {
+	border-bottom: 0;
+}
+
 #hq_advisor_host #hq_advisor .adv_hint p {
 	margin-bottom: 0;
 	font-family: var(--hq-sans);
@@ -1387,6 +1509,19 @@ body.pog-modern-ui #replay_panel {
 	#hq_advisor_host #hq_advisor .adv_body {
 		grid-template-columns: 1fr;
 	}
+
+	#hq_advisor_host #hq_advisor .adv_coach_content {
+		grid-template-columns: 1fr;
+	}
+
+	#hq_advisor_host #hq_advisor .adv_coach_done {
+		grid-column: 1;
+		grid-row: auto;
+		margin-top: 6px;
+	}
+
+	#hq_advisor_host #hq_advisor .adv_coach_title { font-size: 16px; }
+	#hq_advisor_host #hq_advisor .adv_coach_action { font-size: 11.5px; }
 
 	#hq_action_host #actions {
 		grid-template-columns: 1fr;

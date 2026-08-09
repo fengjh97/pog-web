@@ -9,6 +9,12 @@
 ;(function () {
 
 var MOBILE_MQ = window.matchMedia("(max-width: 800px)")
+var COACH_KEY = "pog_campaign_coach_v1"
+var coach_enabled = true
+try {
+	coach_enabled = window.localStorage.getItem(COACH_KEY) !== "0"
+	if (new URLSearchParams(window.location.search).get("coach") === "1") coach_enabled = true
+} catch (error) {}
 
 /* ---------- 阶段解读词典（按原始英文 prompt / 可用动作匹配） ---------- */
 
@@ -170,8 +176,67 @@ function describe_suggestion(sug) {
 
 var panel = null
 var last_prompt = ""
+var last_signature = ""
 var pending_sug = null
 var hl_timer = null
+var coach_plan = null
+
+function action_available(actions, verb) {
+	var value = actions && actions[verb]
+	return Array.isArray(value) ? value.length > 0 : Boolean(value)
+}
+
+function make_coach_plan(prompt, actions, hint) {
+	var plan = {
+		kind: "map",
+		title: hint.title,
+		action: "只处理地图上正在发光的部队或地区；其他内容暂时不用管。",
+		done: "完成后，“当前指令”会自动换成下一项。",
+	}
+
+	if (/Waiting for/.test(prompt))
+		return { kind: "log", title: "先观察电脑行动", action: "你现在不用操作地图。打开“战报”看电脑做了什么，等底部提示重新轮到你。", done: "底部出现需要你选择的指令。" }
+	if (/game over|wins|Draw/.test(prompt))
+		return { kind: "data", title: "复盘这局战争", action: "打开“战况 → 战分总览”，看看哪些城市和事件改变了最终 VP。", done: "看懂最终胜负与 VP 构成。" }
+	if (/You must play "Guns of August"/.test(prompt))
+		return { kind: "hand", title: "打出“八月炮火”", action: "打开“手牌”，点击唯一发光的“八月炮火”，然后选择【事件】。", done: "底部提示变成“摧毁列日要塞并放置集团军”。" }
+	if (action_available(actions, "play_event") || action_available(actions, "play_ops") || action_available(actions, "play_sr") || action_available(actions, "play_rps") || action_available(actions, "card"))
+		return { kind: "hand", title: "先选这一行动要用的牌", action: "打开“手牌”，点一张发光卡牌。新手通常先选 OPS；卡面效果立刻有用时再选事件。", done: "卡牌用途菜单出现，或当前指令进入地图行动。" }
+	if (/Mandated offensive|No mandated offensive|instead of mandated offensive/.test(prompt) && action_available(actions, "next"))
+		return { kind: "actions", title: "记住本回合强制攻势", action: "看清底部显示的目标国，然后点【下一步】。本回合让该国至少进攻一次即可。", done: "进入第 1 行动并要求你打牌。" }
+	if (/Activate spaces/.test(prompt))
+		return { kind: "map", title: "花 OPS 激活一个地区", action: "回到战场，点击金色发光的己方地区，再选择【移动】或【进攻】。", done: "该地区出现移动或进攻标记，剩余 OPS 减少。" }
+	if (/^Move units|^Move .* from|spaces activated for movement/.test(prompt))
+		return { kind: "map", title: "把选中的部队移到金色目的地", action: "先点发光部队，再点一个金色目的地。不要拖动棋子。", done: "棋子移动到新地区，提示转到下一支部队或下一阶段。" }
+	if (/Choose units and a space to attack/.test(prompt))
+		return { kind: "map", title: "建立一次进攻", action: "先点发光的攻击部队，再点红色/金色的相邻敌方地区。", done: "行动面板出现兵力对比与确认进攻。" }
+	if (/^Attack s\d+ with/.test(prompt))
+		return { kind: "actions", title: "确认这场战斗", action: "核对攻击者与目标；打得过就点【进攻】，不满意就【撤销】重选。", done: "系统掷骰并进入战斗牌或损失分配。" }
+	if (/combat cards/.test(prompt) && !/discard/.test(prompt))
+		return { kind: "hand", title: "决定是否使用战斗牌", action: "有合适的红色 CC 就点它；没有就到“行动”点【跳过】。", done: "系统开始掷骰并显示战斗结果。" }
+	if (/Take losses/.test(prompt))
+		return { kind: "map", title: "按提示分配步损", action: "点击发光部队承受损失。优先把满编集团军翻到减员面，尽量不要让整支部队消失。", done: "已分配损失达到要求值，提示进入撤退或推进。" }
+	if (/Retreat|retreat/.test(prompt))
+		return { kind: "map", title: "把战败部队撤到合法地区", action: "点需要撤退的部队，再点金色合法目的地；避开敌控和已满堆叠地区。", done: "所有战败部队完成规定格数的撤退。" }
+	if (/You may advance/.test(prompt))
+		return { kind: "map", title: "推进占领刚打下的地区", action: "点获胜的攻击部队，再点刚被清空的目标地区；不想推进可在行动面板点【停止】。", done: "控制权改变，战斗结束。" }
+	if (/Strategic Redeployment/.test(prompt))
+		return { kind: "map", title: "用 SR 做长距离调兵", action: "点可调动部队，再点沿己方交通线连通的金色目的地；完成后点【结束行动】。", done: "SR 点用完或你主动结束本行动。" }
+	if (/Replacement|Landwehr/.test(prompt) || action_available(actions, "end_rp"))
+		return { kind: "map", title: "用 RP 修复受损部队", action: "点可补充的减员部队或补充箱单位；没有重要单位要补时点【结束补充阶段】。", done: "补充点花完或进入下一回合。" }
+	if (/Reinforcements/.test(prompt))
+		return { kind: "map", title: "把增援放到指定城市", action: "点增援部队，再点金色合法城市。优先补强正在承压的战线。", done: "所有必须放置的增援已上图。" }
+	if (/entrench|Entrench/.test(prompt))
+		return { kind: "map", title: "为前线构筑堑壕", action: "点发光的集团军尝试挖壕；西线关键城市和战线缺口最值得防守。", done: "完成掷骰并出现堑壕标记，或本次尝试失败。" }
+
+	var button_order = [ "next", "done", "end_action", "end_rp", "end_sr", "skip", "stop", "pass", "no_attack" ]
+	for (var i = 0; i < button_order.length; ++i) {
+		var verb = button_order[i]
+		if (action_available(actions, verb))
+			return { kind: "actions", title: "确认当前阶段", action: "点行动面板中的【" + (VERB_ZH[verb] || verb) + "】。", done: "当前指令自动进入下一阶段。" }
+	}
+	return plan
+}
 
 /* ---------- 高亮建议目标 ---------- */
 
@@ -241,6 +306,7 @@ function build_panel() {
 			"<button class=\"adv_x\" type=\"button\">✕</button>" +
 		"</div>" +
 		"<div class=\"adv_body\">" +
+			"<div class=\"adv_coach\"><div class=\"adv_coach_head\"><span>新手陪玩</span><button class=\"adv_coach_toggle\" type=\"button\"></button></div><div class=\"adv_coach_content\"><small>现在只做这一步</small><b class=\"adv_coach_title\"></b><p class=\"adv_coach_action\"></p><div class=\"adv_coach_done\"><span>完成标志</span><p></p></div><div class=\"adv_coach_buttons\"><button class=\"adv_locate\" type=\"button\">带我找到下一步</button><button class=\"adv_school\" type=\"button\">返回军校</button></div></div></div>" +
 			"<div class=\"adv_hint\"><b></b><p></p></div>" +
 			"<div class=\"adv_sug\">" +
 				"<button class=\"adv_ask\" type=\"button\">🎖 参谋建议</button>" +
@@ -260,6 +326,11 @@ function build_panel() {
 			document.body.classList.remove("hq-advisor-open")
 	})
 	panel.querySelector(".adv_ask").addEventListener("click", compute_suggestion)
+	panel.querySelector(".adv_coach_toggle").addEventListener("click", toggle_coach)
+	panel.querySelector(".adv_locate").addEventListener("click", guide_next)
+	panel.querySelector(".adv_school").addEventListener("click", function () {
+		if (window.POG_ACADEMY) window.POG_ACADEMY.open()
+	})
 	panel.querySelector(".adv_do").addEventListener("click", function () {
 		if (pending_sug && typeof send_action === "function") {
 			send_action(pending_sug.verb, pending_sug.noun)
@@ -267,7 +338,34 @@ function build_panel() {
 			hide_result()
 		}
 	})
+	refresh_coach_toggle()
 
+}
+
+function refresh_coach_toggle() {
+	if (!panel) return
+	panel.classList.toggle("coach-off", !coach_enabled)
+	panel.querySelector(".adv_coach_toggle").textContent = coach_enabled ? "关闭" : "开启"
+}
+
+function toggle_coach() {
+	coach_enabled = !coach_enabled
+	try { window.localStorage.setItem(COACH_KEY, coach_enabled ? "1" : "0") } catch (error) {}
+	refresh_coach_toggle()
+	last_signature = ""
+	refresh_hint()
+}
+
+function guide_next() {
+	if (!coach_plan) return
+	if (window.POG_UI) {
+		if (coach_plan.kind === "hand") window.POG_UI.open("hand")
+		else if (coach_plan.kind === "log") window.POG_UI.open("log")
+		else if (coach_plan.kind === "data") window.POG_UI.open("data")
+		else if (coach_plan.kind === "actions") window.POG_UI.open("actions")
+		else window.POG_UI.close()
+	}
+	if (coach_plan.kind === "map") compute_suggestion()
 }
 
 function hide_result() {
@@ -314,12 +412,14 @@ function refresh_hint() {
 	if (!panel || typeof view === "undefined" || !view)
 		return
 	var p = String(view.prompt || "")
-	if (p === last_prompt)
+	var a = view.actions || {}
+	var signature = p + "|" + Object.keys(a).sort().join(",")
+	if (signature === last_signature)
 		return
 	last_prompt = p
+	last_signature = signature
 	clear_highlight()
 	hide_result()
-	var a = view.actions || {}
 	var hint = DEFAULT_HINT
 	for (var i = 0; i < HINTS.length; ++i) {
 		try {
@@ -328,6 +428,11 @@ function refresh_hint() {
 	}
 	panel.querySelector(".adv_hint b").textContent = hint.title
 	panel.querySelector(".adv_hint p").textContent = hint.text
+	coach_plan = make_coach_plan(p, a, hint)
+	panel.querySelector(".adv_coach_title").textContent = coach_plan.title
+	panel.querySelector(".adv_coach_action").textContent = coach_plan.action
+	panel.querySelector(".adv_coach_done p").textContent = coach_plan.done
+	refresh_coach_toggle()
 }
 
 window.addEventListener("load", function () {
