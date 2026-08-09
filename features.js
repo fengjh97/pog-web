@@ -11,7 +11,6 @@ if (!data)
 	data = require("./data.js")
 
 var PIECE_NATIONS = ["ge","ah","tu","bu","fr","br","ru","it","be","sb","mn","ro","gr","us","sn","ana"]
-var CP_NATIONS = { ge:1, ah:1, tu:1, bu:1 }
 var SPACE_NATIONS = ["fr","be","ge","ah","ru","it","sb","bu","ro","tu","gr","br","mn","al","pe","ar","eg"]
 
 var VP_SPACES = []
@@ -39,7 +38,7 @@ var COMMITMENTS = ["mobilization", "limited", "total"]
 function extract(s) {
 	var f = []
 
-	/* global scalars */
+	/* campaign-wide scalar features */
 	f.push((s.turn || 0) / 20)
 	f.push((s.vp - 10) / 10)
 	f.push((s.us_entry || 0) / 4)
@@ -84,7 +83,7 @@ function extract(s) {
 		for (var r = 0; r < s.reduced.length; ++r)
 			reduced_set[s.reduced[r]] = 1
 	var nat_army = {}, nat_corps = {}, nat_red = {}, nat_cf = {}
-	var space_cf_cp = new Array(0), per_space_nation_cf = {}
+	var per_space_nation_cf = {}
 	for (var ni = 0; ni < SPACE_NATIONS.length; ++ni)
 		per_space_nation_cf[SPACE_NATIONS[ni]] = 0
 

@@ -1,10 +1,14 @@
 # 光荣之路 · Paths of Glory 单机网页版
 
-《Paths of Glory》(GMT Games, Ted Raicer 设计) 的浏览器单机版：规则引擎直接在浏览器里运行，内置启发式 AI 对手，界面汉化，无需服务器。
+《Paths of Glory》(GMT Games, Ted Raicer 设计) 的浏览器单机版：规则引擎与 B-full 强化学习 AI 都直接在浏览器里运行，界面汉化，无需服务器。
 
-- **对 AI**：选协约国或同盟国，AI 执对面
+- **对 AI**：选协约国或同盟国，默认对手是完整 20 回合战役自对弈训练的 B-full 循环 PPO；也可选择启发式对手
 - **热座**：一人双方推演，自动换座
-- 规则自动裁判、撤销、回放、存档（localStorage）、补给显示、战分总览
+- 规则自动裁判、逐步 AI 行动与棋子动画、撤销、回放、存档（含 GRU 记忆）、补给显示、战分总览
+
+在线版：<https://fengjh97.github.io/pog-web/>
+
+模型摘要：<https://fengjh97.github.io/pog-web/ai-report.html>
 
 ## 本地运行
 
@@ -21,8 +25,12 @@ python3 -m http.server 8091
 
 - `rules.js` / `data.js` — 完整规则引擎（RTT 官方模块，未改动）
 - `common/client.js` — RTT 客户端（改动：相对路径 + 少量文案汉化）
-- `local.js` — 本项目新增：用假 WebSocket 在浏览器内模拟 RTT 服务端协议（存档/快照/回放），并驱动内置 AI（贪心一步搜索 + 局面评估：VP、兵力、战争状态、补给）
+- `local.js` — 用假 WebSocket 在浏览器内模拟 RTT 服务端协议（存档/快照/回放），并逐步调度 AI
+- `rl2/browser-agent.js` / `rl2/jsnn.js` — B-full 的 603 维观测、20 维合法候选编码、128 维 GRU 与指针策略推理；只使用正常玩家视角
+- `rl2/models/bf_cur.json` — B-full 完整战役 checkpoint（arm B，iteration 80）
 - `zh.js` — 本项目新增：自动生成的汉化层（271 条界面/日志模板 + 130 张卡牌译名）
+
+完整训练设计、消融结果与限制见 [`rl2/REPORT.md`](rl2/REPORT.md)，后续实验议程见 [`rl2/NEXT.md`](rl2/NEXT.md)。B-full 在报告的 60 局完整战役竞技场中对启发式为 55–5；这是单随机种子结果，不代表已验证达到人类水平。
 
 ## 版权
 

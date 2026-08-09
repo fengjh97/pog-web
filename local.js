@@ -20,7 +20,8 @@ var DATA = null
 
 var game = null        // current rules state
 var snaps = []         // in-memory snapshot states for the replay panel
-var save_meta = null   // {ai_role, scenario, options, hotseat}
+var save_meta = null   // {ai_role, ai_kind, scenario, options, hotseat, seed}
+var ai_memory = null   // persisted B-full GRU/recovery state
 
 /* ---------- CommonJS-in-browser loader (same trick as RTT replay.js) ---------- */
 
@@ -60,9 +61,10 @@ async function load_rules() {
 function save_game() {
 	try {
 		window.localStorage.setItem(SAVE_KEY, JSON.stringify({
-			version: 1,
+			version: 2,
 			meta: save_meta,
 			state: game,
+			ai_memory: ai_memory,
 		}))
 	} catch (err) {
 		console.error("SAVE FAILED", err)
@@ -75,7 +77,7 @@ function load_save() {
 		if (!text)
 			return null
 		var obj = JSON.parse(text)
-		if (obj && obj.version === 1 && obj.state)
+		if (obj && (obj.version === 1 || obj.version === 2) && obj.state)
 			return obj
 	} catch (err) {
 		console.error("LOAD FAILED", err)
@@ -143,13 +145,18 @@ LocalSocket.prototype._init = async function () {
 			scenario = RULES.scenarios[0]
 		var seed = parseInt(page.get("seed")) || ((Math.random() * 0x7fffffff) | 0)
 		var hotseat = page.get("hotseat") === "1"
+		var requested_ai = page.get("ai")
+		if (requested_ai !== "bfull" && requested_ai !== "nn" && requested_ai !== "heuristic")
+			requested_ai = "bfull"
 		save_meta = {
 			scenario: scenario,
 			options: {},
 			hotseat: hotseat,
 			ai_role: hotseat ? null : (self.role === AP ? CP : AP),
-			ai_kind: page.get("ai") === "nn" ? "nn" : "heuristic",
+			ai_kind: requested_ai,
+			seed: seed,
 		}
+		ai_memory = null
 		game = RULES.setup(seed, scenario, {})
 		snaps = []
 		save_game()
@@ -160,6 +167,7 @@ LocalSocket.prototype._init = async function () {
 	} else {
 		save_meta = saved.meta
 		game = saved.state
+		ai_memory = saved.ai_memory || null
 		snaps = []
 	}
 
@@ -168,7 +176,7 @@ LocalSocket.prototype._init = async function () {
 	if (self.onopen)
 		self.onopen({})
 
-	var ai_name = "AI 将军" // AI 将军
+	var ai_name = save_meta.ai_kind === "bfull" ? "B-full 强化学习 AI" : "AI 将军"
 	var players = [
 		{ role: AP, name: save_meta.hotseat ? "热座" : (save_meta.ai_role === AP ? ai_name : "你") },
 		{ role: CP, name: save_meta.hotseat ? "热座" : (save_meta.ai_role === CP ? ai_name : "你") },
@@ -238,6 +246,8 @@ LocalSocket.prototype.close = function () {
 LocalSocket.prototype._on_action = function (verb, noun) {
 	var self = this
 	var prev_active = game.active
+	if (verb === "undo")
+		ai_memory = null
 	game = RULES.action(game, self.role, verb, noun)
 	maybe_snapshot(prev_active)
 	after_change(self)
@@ -286,24 +296,46 @@ LocalSocket.prototype._maybe_hotseat_switch = function () {
 /* ---------- AI ---------- */
 
 var ai_timer = null
-var nn_model = null      // value network weights, loaded on demand
+var ai_next_delay = 500
+var nn_model = null      // legacy value network, loaded on demand
 var nn_load_failed = false
+var bfull_model = null   // recurrent RL2 policy, loaded on demand
+var bfull_load_failed = false
 
 function maybe_load_model() {
-	if (nn_model || nn_load_failed)
+	if (!save_meta)
 		return
-	if (!save_meta || save_meta.ai_kind !== "nn")
-		return
-	fetch("model.json").then(function (r) {
-		if (!r.ok) throw new Error("no model")
-		return r.json()
-	}).then(function (m) {
-		nn_model = m
-		console.log("NN model loaded:", m.meta)
-	}).catch(function (err) {
-		console.error("NN model unavailable, falling back to heuristic:", err)
-		nn_load_failed = true
-	})
+	if (save_meta.ai_kind === "bfull" && !bfull_model && !bfull_load_failed) {
+		fetch("rl2/models/bf_cur.json").then(function (r) {
+			if (!r.ok) throw new Error("no B-full model")
+			return r.json()
+		}).then(function (m) {
+			bfull_model = m
+			console.log("B-full RL2 model loaded:", m.meta)
+		}).catch(function (err) {
+			console.error("B-full model unavailable, falling back to heuristic:", err)
+			bfull_load_failed = true
+		})
+	} else if (save_meta.ai_kind === "nn" && !nn_model && !nn_load_failed) {
+		fetch("model.json").then(function (r) {
+			if (!r.ok) throw new Error("no model")
+			return r.json()
+		}).then(function (m) {
+			nn_model = m
+			console.log("Legacy value model loaded:", m.meta)
+		}).catch(function (err) {
+			console.error("Legacy value model unavailable, falling back to heuristic:", err)
+			nn_load_failed = true
+		})
+	}
+}
+
+function model_is_loading() {
+	if (save_meta.ai_kind === "bfull")
+		return !bfull_model && !bfull_load_failed
+	if (save_meta.ai_kind === "nn")
+		return !nn_model && !nn_load_failed
+	return false
 }
 
 /* value of a state for the AI: NN if available, else hand-crafted heuristic */
@@ -339,7 +371,8 @@ function schedule_ai(sock) {
 	ai_timer = setTimeout(function () {
 		ai_timer = null
 		ai_step(sock)
-	}, 150)
+	}, ai_next_delay)
+	ai_next_delay = 320
 }
 
 function ai_step(sock) {
@@ -347,41 +380,31 @@ function ai_step(sock) {
 	if (game.state === "game_over" || !role_is_active(role))
 		return
 
-	// wait for the value network to finish loading
-	if (save_meta.ai_kind === "nn" && !nn_model && !nn_load_failed) {
+	// wait for the selected model to finish loading
+	if (model_is_loading()) {
 		ai_timer = setTimeout(function () { ai_timer = null; ai_step(sock) }, 200)
 		return
 	}
 
 	var prev_active = game.active
-	var acted = false
-	var quick = 0
-
-	// run consecutive decisions; push a UI update between "interesting" ones
-	while (game.state !== "game_over" && role_is_active(role) && quick < 100) {
-		var v = RULES.view(game, role)
-		var candidates = list_actions(v)
-		if (candidates.length === 0)
-			break
-		var choice
-		if (candidates.length === 1)
-			choice = candidates[0]
-		else
-			choice = ai_choose(candidates, role, v)
-		game = RULES.action(game, role, choice[0], choice[1])
-		maybe_snapshot(prev_active)
-		prev_active = game.active
-		acted = true
-		quick++
-		// yield to UI after multi-option decisions so the player can follow along
-		if (candidates.length > 1)
-			break
+	var v = RULES.view(game, role)
+	var candidates = list_actions(v)
+	if (candidates.length === 0) {
+		console.error("AI stuck: no actions available", game.state)
+		return
 	}
 
-	if (acted)
-		after_change(sock)
-	else if (role_is_active(role) && game.state !== "game_over")
-		console.error("AI stuck: no actions available", game.state)
+	var previous_memory = ai_memory
+	var choice = (candidates.length === 1 && save_meta.ai_kind !== "bfull") ? candidates[0] : ai_choose(candidates, role, v)
+	ai_next_delay = action_delay(choice, v)
+	try {
+		game = RULES.action(game, role, choice[0], choice[1])
+	} catch (error) {
+		ai_memory = previous_memory
+		throw error
+	}
+	maybe_snapshot(prev_active)
+	after_change(sock)
 }
 
 function list_actions(v) {
@@ -415,6 +438,26 @@ function ai_choose(candidates, role, v) {
 			if (candidates[i][0] === "accept")
 				return candidates[i]
 	}
+
+	if (save_meta.ai_kind === "bfull" && bfull_model && window.pog_bfull) {
+		var decision = window.pog_bfull.choose({
+			game_id: save_meta.seed || "local",
+			role: role,
+			view: v,
+			candidates: candidates,
+			model: bfull_model,
+			memory: ai_memory,
+		})
+		if (decision) {
+			ai_memory = decision.memory
+			return decision.choice
+		}
+	}
+
+	return heuristic_choose(candidates, role)
+}
+
+function heuristic_choose(candidates, role) {
 
 	// cap the number of scored candidates to bound think time
 	var pool = candidates
@@ -450,6 +493,19 @@ function ai_choose(candidates, role, v) {
 		}
 	}
 	return best || candidates[0]
+}
+
+function action_delay(choice, v) {
+	if (save_meta.ai_kind === "bfull" && window.pog_bfull)
+		return window.pog_bfull.delay(choice, v)
+	var action = choice[0]
+	if (action.indexOf("play_") === 0)
+		return 900
+	if (action === "space" || action === "piece")
+		return 650
+	if (action === "attack" || action === "flank")
+		return 800
+	return 360
 }
 
 function resolve_combat(s) {
@@ -572,7 +628,7 @@ window.pog_suggest = function () {
 	var cands = list_actions(v)
 	if (cands.length === 0)
 		return { waiting: true }
-	var pick = cands.length === 1 ? cands[0] : ai_choose(cands, role, v)
+	var pick = cands.length === 1 ? cands[0] : heuristic_choose(cands, role)
 	return {
 		verb: pick[0],
 		noun: pick[1],

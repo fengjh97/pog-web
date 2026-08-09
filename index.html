@@ -373,6 +373,7 @@ button:focus-visible { outline: 2px solid #2b2419; outline-offset: 2px; }
 	color: var(--ink-faint);
 	text-align: justify;
 }
+.note a { color: var(--crimson); font-weight: 700; }
 
 /* ---------- 桌面 ---------- */
 @media (min-width: 900px) {
@@ -490,15 +491,15 @@ button:focus-visible { outline: 2px solid #2b2419; outline-offset: 2px; }
 		</fieldset>
 
 		<fieldset class="ai-group">
-			<legend>AI 强度 <span class="hint hotseat-note">热座模式下不适用</span></legend>
+			<legend>AI 对手 <span class="hint hotseat-note">热座模式下不适用</span></legend>
 			<div class="opts two">
 				<label class="opt">
-					<input type="radio" name="ai" value="nn" checked>
+					<input type="radio" name="ai" value="bfull" checked>
 					<span class="tile">
 						<span class="dot"></span>
 						<span class="txt">
-							<span class="name">神经网络</span>
-							<span class="desc">自对弈训练，较强</span>
+							<span class="name">B-full 强化学习</span>
+							<span class="desc">20 回合自对弈 PPO · 推荐</span>
 						</span>
 					</span>
 				</label>
@@ -522,7 +523,7 @@ button:focus-visible { outline: 2px solid #2b2419; outline-offset: 2px; }
 		<p class="save-state" id="save_state">本机暂无存档</p>
 
 		<p class="note">
-			对手为内置 AI（自对弈训练的价值网络 + 战斗推演）。规则由引擎自动裁判，支持撤销与回放。<br>
+			B-full 是完整历史战役自对弈训练的循环 PPO 策略；AI 行动会逐步播放并保存记忆。大战剧本可运行，但属于训练分布外实验。<a href="ai-report.html">查看模型报告</a>。<br>
 			规则实现与美术素材 © GMT Games；引擎源码 © Nathan Forget &amp; Tor Andersson (Rally the Troops)。仅供个人学习娱乐，请支持实体版。
 		</p>
 
