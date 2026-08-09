@@ -79,4 +79,9 @@ function softmax_sample(logits, temp, rng) {
 
 function new_hidden() { return new Float64Array(128) }
 
-module.exports = { policy_step, softmax_sample, new_hidden, encode, gru_step }
+const api = { policy_step, softmax_sample, new_hidden, encode, gru_step }
+
+if (typeof module !== "undefined")
+	module.exports = api
+else
+	window.pog_rl2 = api

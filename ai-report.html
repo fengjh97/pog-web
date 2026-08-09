@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#171a1d">
+<title>B-full 强化学习 AI · 光荣之路</title>
+<style>
+:root {
+	--bg: #111619;
+	--panel: #1b2327;
+	--line: #364348;
+	--ink: #edf0ec;
+	--muted: #9ca8a8;
+	--brass: #d3ad60;
+	--ap: #d66b64;
+	--cp: #6c9ccc;
+}
+* { box-sizing: border-box; }
+html { color-scheme: dark; }
+body {
+	margin: 0;
+	font: 15px/1.72 system-ui, -apple-system, "PingFang SC", "Noto Sans CJK SC", sans-serif;
+	color: var(--ink);
+	background:
+		radial-gradient(circle at 12% 0%, rgba(108,156,204,.13), transparent 35rem),
+		radial-gradient(circle at 90% 12%, rgba(214,107,100,.1), transparent 32rem),
+		var(--bg);
+}
+a { color: #efc977; }
+.wrap { width: min(1080px, calc(100% - 32px)); margin: auto; }
+header { padding: 26px 0 62px; border-bottom: 1px solid var(--line); }
+nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+nav a { text-decoration: none; }
+.brand { color: var(--ink); font-family: Georgia, serif; letter-spacing: .08em; }
+.play {
+	padding: 9px 15px;
+	border: 1px solid #b78f45;
+	border-radius: 7px;
+	color: #17140e;
+	background: linear-gradient(#eed38e, #c9a251);
+	font-weight: 800;
+}
+.hero { max-width: 820px; padding-top: 72px; }
+.eyebrow { color: var(--brass); font-size: 11px; font-weight: 800; letter-spacing: .22em; }
+h1 { margin: 10px 0 16px; font: 700 clamp(38px, 7vw, 74px)/1.04 Georgia, serif; }
+.lead { max-width: 720px; margin: 0; color: #c8d0ce; font-size: clamp(17px, 2.2vw, 21px); }
+.badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 25px; }
+.badge { padding: 6px 10px; border: 1px solid var(--line); border-radius: 99px; color: #c9d0ce; background: #20292d; font-size: 12px; }
+main { padding: 44px 0 80px; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.card { padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: rgba(27,35,39,.88); box-shadow: 0 18px 45px rgba(0,0,0,.18); }
+.metric { color: var(--brass); font: 700 34px/1 Georgia, serif; }
+.label { margin-top: 8px; color: var(--muted); font-size: 12px; }
+section { margin-top: 48px; }
+h2 { margin: 0 0 18px; font: 700 27px/1.2 Georgia, serif; }
+.flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.step { position: relative; min-height: 150px; padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: #192125; }
+.step b { display: block; margin-bottom: 9px; color: var(--brass); }
+.step span { color: var(--muted); font-size: 13px; }
+.step:not(:last-child)::after { content: "→"; position: absolute; z-index: 2; top: 55px; right: -17px; color: var(--brass); font-size: 20px; }
+.two { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; }
+.note { padding: 20px; border-left: 4px solid var(--brass); background: #1c2428; }
+.note.warning { border-left-color: var(--ap); }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 11px 10px; border-bottom: 1px solid var(--line); text-align: left; }
+th { color: var(--muted); font-size: 12px; }
+.files { display: flex; flex-wrap: wrap; gap: 10px; }
+.files a { padding: 10px 13px; border: 1px solid var(--line); border-radius: 7px; background: #1b2327; text-decoration: none; }
+footer { padding: 24px 0 40px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+@media (max-width: 760px) {
+	.grid, .flow, .two { grid-template-columns: 1fr; }
+	.step { min-height: auto; }
+	.step:not(:last-child)::after { content: "↓"; top: auto; right: 20px; bottom: -20px; }
+	header { padding-bottom: 42px; }
+	.hero { padding-top: 48px; }
+}
+</style>
+</head>
+<body>
+<header>
+	<div class="wrap">
+		<nav>
+			<a class="brand" href="index.html">PATHS OF GLORY · 光荣之路</a>
+			<a class="play" href="index.html">进入游戏</a>
+		</nav>
+		<div class="hero">
+			<div class="eyebrow">DEPLOYED POLICY · RL2</div>
+			<h1>B-full 强化学习 AI</h1>
+			<p class="lead">一个在完整 20 回合历史战役中自对弈训练的循环 PPO 对手。模型、规则引擎和存档全部在浏览器本地运行，不需要游戏服务器。</p>
+			<div class="badges">
+				<span class="badge">arm B · iteration 80</span>
+				<span class="badge">603 维观测</span>
+				<span class="badge">128 维 GRU</span>
+				<span class="badge">合法动作掩码</span>
+				<span class="badge">无对手手牌泄漏</span>
+			</div>
+		</div>
+	</div>
+</header>
+
+<main class="wrap">
+	<div class="grid">
+		<div class="card"><div class="metric">55–5</div><div class="label">B-full 对启发式，60 局完整战役</div></div>
+		<div class="card"><div class="metric">92%</div><div class="label">报告竞技场胜率，双方轮换执方</div></div>
+		<div class="card"><div class="metric">+7.87</div><div class="label">平均 VP 边际</div></div>
+	</div>
+
+	<section>
+		<h2>浏览器内决策路径</h2>
+		<div class="flow">
+			<div class="step"><b>正常玩家视角</b><span>只读取公开局面、己方手牌与规则引擎提供的合法动作。</span></div>
+			<div class="step"><b>循环表征</b><span>537 维公开状态 + 65 维己方手牌 + 阵营位，经 128 维 GRU 保留历史。</span></div>
+			<div class="step"><b>候选动作评分</b><span>每个合法候选编码为 20 维；超过 16 个时进行可复现下采样。</span></div>
+			<div class="step"><b>规则权威执行</b><span>AI 只能选择规则引擎已经列出的动作；状态变化仍由原始 rules.js 裁判。</span></div>
+		</div>
+	</section>
+
+	<section class="two">
+		<div class="card">
+			<h2>训练与消融</h2>
+			<table>
+				<tr><th>策略</th><th>结构</th><th>结论</th></tr>
+				<tr><td>B-full</td><td>GRU，无 belief</td><td>当前部署模型</td></tr>
+				<tr><td>C-full</td><td>GRU + belief</td><td>共享梯度未带来棋力增益</td></tr>
+				<tr><td>C-sg</td><td>belief stop-gradient</td><td>缓解梯度干扰</td></tr>
+			</table>
+		</div>
+		<div>
+			<div class="note">GRU 记忆与恢复状态会随棋局一起写入浏览器 localStorage；刷新页面后可以继续。</div>
+			<div class="note warning" style="margin-top:12px">这些结果来自单随机种子、对自动策略的评测。尚未完成多人类、多种子棋力验证，不能解读为“人类高手水平”。大战剧本也不在主要训练分布内。</div>
+		</div>
+	</section>
+
+	<section>
+		<h2>完整资料</h2>
+		<div class="files">
+			<a href="rl2/REPORT.md">完整实验报告</a>
+			<a href="rl2/NEXT.md">后续实验议程</a>
+			<a href="https://github.com/fengjh97/pog-web/tree/main/rl2">训练代码与配置</a>
+			<a href="index.html">开始对局</a>
+		</div>
+	</section>
+</main>
+
+<footer><div class="wrap">仅供个人学习与非商业研究。游戏规则与美术素材版权归 GMT Games；规则引擎来源见项目 README。</div></footer>
+</body>
+</html>

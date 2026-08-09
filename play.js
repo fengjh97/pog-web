@@ -265,6 +265,227 @@ set_mouse_focus(window.localStorage[params.title_id + "/mouse_focus"] | 0)
 let focus = null
 let focus_box = document.getElementById("focus")
 
+let previous_piece_locations = null
+let previous_last_card = null
+let previous_replay_snapshot = null
+let movement_report_timers = []
+let piece_movement_animations = []
+let card_reveal_timers = []
+
+function replay_snapshot_number() {
+    let prompt = String(view.prompt || "")
+    let match = prompt.match(/^Replay (\d+) \/ \d+/) || prompt.match(/^\[(\d+)\/\d+\]/)
+    return match ? Number(match[1]) : null
+}
+
+function is_reverse_replay_transition(replay_snapshot) {
+    return previous_replay_snapshot !== null && (replay_snapshot === null || replay_snapshot <= previous_replay_snapshot)
+}
+
+function movement_changes() {
+    let result = []
+    if (!previous_piece_locations)
+        return result
+    for (let p = 1; p < view.location.length; ++p) {
+        let from = previous_piece_locations[p]
+        let to = view.location[p]
+        if (from !== to)
+            result.push({ piece: p, from: abs(from), to: abs(to) })
+    }
+    return result
+}
+
+function capture_moving_piece_positions(movements) {
+    let positions = new Map()
+    for (let movement of movements) {
+        let elt = pieces[movement.piece].element
+        if (elt && elt.isConnected && !elt.classList.contains("offmap"))
+            positions.set(movement.piece, elt.getBoundingClientRect())
+    }
+    return positions
+}
+
+function movement_location_name(location) {
+    if (!location)
+        return "地图外"
+    return spaces[location] ? spaces[location].name : "预备区域"
+}
+
+function movement_order_name(movement) {
+    let from_map = movement.from > 0 && movement.from < map_space_count
+    let to_map = movement.to > 0 && movement.to < map_space_count
+    if (from_map && to_map)
+        return "移动"
+    if (!from_map && to_map)
+        return "部署"
+    if (from_map && !to_map)
+        return "伤亡"
+    return "兵力变化"
+}
+
+function movement_faction_name(unit) {
+    return unit.faction === AP ? "协约国" : "同盟国"
+}
+
+function stop_movement_report() {
+    for (let timer of movement_report_timers)
+        window.clearTimeout(timer)
+    movement_report_timers = []
+    let report = document.getElementById("movement_report")
+    report.classList.remove("show")
+    report.hidden = true
+}
+
+function stop_piece_movements() {
+    for (let animation of piece_movement_animations)
+        animation.cancel()
+    piece_movement_animations = []
+    for (let elt of document.querySelectorAll(".unit.is-moving"))
+        elt.classList.remove("is-moving")
+}
+
+function report_movements(movements) {
+    if (movements.length === 0)
+        return
+
+    let report = document.getElementById("movement_report")
+    let reduced_motion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    let step_delay = reduced_motion ? 0 : 420
+
+    stop_movement_report()
+    report.hidden = false
+    report.classList.remove("show")
+    void report.offsetWidth
+    report.classList.add("show")
+
+    if (reduced_motion) {
+        let first = movements[0]
+        let unit = pieces[first.piece]
+        let extra = movements.length > 1 ? `，另有 ${movements.length - 1} 支部队` : ""
+        document.getElementById("movement_kicker").textContent = `${movement_faction_name(unit)} · ${movement_order_name(first)}`
+        document.getElementById("movement_text").textContent = `${unit.name}：${movement_location_name(first.from)} → ${movement_location_name(first.to)}${extra}`
+        report.dataset.side = unit.faction
+    } else {
+        movements.forEach((movement, index) => {
+            movement_report_timers.push(window.setTimeout(() => {
+                let unit = pieces[movement.piece]
+                let order = `${movement_faction_name(unit)} · ${movement_order_name(movement)}`
+                document.getElementById("movement_kicker").textContent = movements.length > 1 ? `${order} · ${index + 1}/${movements.length}` : order
+                document.getElementById("movement_text").textContent = `${unit.name}：${movement_location_name(movement.from)} → ${movement_location_name(movement.to)}`
+                report.dataset.side = unit.faction
+            }, index * step_delay))
+        })
+    }
+
+    movement_report_timers.push(window.setTimeout(() => {
+        report.classList.remove("show")
+        movement_report_timers.push(window.setTimeout(() => { report.hidden = true }, 250))
+    }, 1600 + Math.max(0, movements.length - 1) * step_delay))
+}
+
+function animate_piece_movements(movements, old_positions) {
+    if (movements.length === 0)
+        return
+    stop_piece_movements()
+    report_movements(movements)
+
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+        return
+
+    let map = document.getElementById("map")
+    let scale = map.getBoundingClientRect().width / map.offsetWidth || 1
+    let movement_index = 0
+
+    for (let movement of movements) {
+        let elt = pieces[movement.piece].element
+        if (!elt || !elt.isConnected || elt.classList.contains("offmap") || typeof elt.animate !== "function")
+            continue
+
+        let before = old_positions.get(movement.piece)
+        let after = elt.getBoundingClientRect()
+        let keyframes
+        if (before) {
+            let dx = (before.left - after.left) / scale
+            let dy = (before.top - after.top) / scale
+            keyframes = [
+                { translate: `${dx}px ${dy}px`, scale: 1, filter: "brightness(1) drop-shadow(0 2px 2px #0008)" },
+                { translate: `${dx * 0.22}px ${dy * 0.22 - 7}px`, scale: 1.12, filter: "brightness(1.14) drop-shadow(0 12px 7px #0008)", offset: 0.72 },
+                { translate: "0 0", scale: 1, filter: "brightness(1) drop-shadow(0 3px 2px #0009)" },
+            ]
+        } else {
+            keyframes = [
+                { translate: "0 -18px", scale: 0.82, opacity: 0 },
+                { translate: "0 -5px", scale: 1.1, opacity: 1, offset: 0.72 },
+                { translate: "0 0", scale: 1, opacity: 1 },
+            ]
+        }
+
+        elt.classList.add("is-moving")
+        let animation = elt.animate(keyframes, {
+            duration: 820,
+            delay: movement_index * 420,
+            easing: "cubic-bezier(.2,.72,.18,1)",
+            fill: "backwards",
+        })
+        piece_movement_animations.push(animation)
+        let finish = () => {
+            elt.classList.remove("is-moving")
+            let index = piece_movement_animations.indexOf(animation)
+            if (index >= 0)
+                piece_movement_animations.splice(index, 1)
+        }
+        if (animation.finished)
+            animation.finished.then(finish, finish)
+        else
+            window.setTimeout(finish, 820 + movement_index * 420)
+        movement_index++
+    }
+}
+
+function stop_card_reveal() {
+    for (let timer of card_reveal_timers)
+        window.clearTimeout(timer)
+    card_reveal_timers = []
+    let reveal = document.getElementById("card_reveal")
+    reveal.classList.remove("show")
+    reveal.hidden = true
+}
+
+function reveal_last_card(suppress) {
+    let card = view.last_card
+    if (suppress) {
+        previous_last_card = card
+        stop_card_reveal()
+        return
+    }
+    if (previous_last_card === null) {
+        previous_last_card = card
+        return
+    }
+    if (!card || card === previous_last_card || !cards[card]) {
+        previous_last_card = card
+        return
+    }
+
+    previous_last_card = card
+    let reveal = document.getElementById("card_reveal")
+    let art = document.getElementById("card_reveal_art")
+    let faction = card <= HIGHEST_AP_CARD ? AP : CP
+
+    stop_card_reveal()
+    art.className = `card ${faction} ${card_class_name(card)}`
+    document.getElementById("card_reveal_name").textContent = cards[card].name
+    reveal.dataset.side = faction
+    reveal.hidden = false
+    reveal.classList.remove("show")
+    void reveal.offsetWidth
+    reveal.classList.add("show")
+    card_reveal_timers.push(window.setTimeout(() => {
+        reveal.classList.remove("show")
+        card_reveal_timers.push(window.setTimeout(() => { reveal.hidden = true }, 300))
+    }, 2200))
+}
+
 const SINAI = spaces.find(s => s.name === "Sinai").id
 
 // SUPPLY LINE DISPLAY
@@ -3030,8 +3251,20 @@ function update_card_zones() {
 }
 
 function on_update() {
+    let replay_snapshot = replay_snapshot_number()
+    let reverse_replay = is_reverse_replay_transition(replay_snapshot)
+    let movements = reverse_replay ? [] : movement_changes()
+    let old_positions = capture_moving_piece_positions(movements)
+    if (reverse_replay) {
+        stop_piece_movements()
+        stop_movement_report()
+    }
     hide_supply()
     update_map()
+    animate_piece_movements(movements, old_positions)
+    reveal_last_card(reverse_replay)
+    previous_piece_locations = view.location.slice()
+    previous_replay_snapshot = replay_snapshot
 }
 
 // INITIALIZE CLIENT
