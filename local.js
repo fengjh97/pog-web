@@ -499,8 +499,11 @@ function action_delay(choice, v) {
 	if (save_meta.ai_kind === "bfull" && window.pog_bfull)
 		return window.pog_bfull.delay(choice, v)
 	var action = choice[0]
+	var prompt = v.prompt || ""
 	if (action.indexOf("play_") === 0)
 		return 900
+	if ((action === "space" || action === "piece") && /move|advance|retreat|redeployment/i.test(prompt))
+		return 1400
 	if (action === "space" || action === "piece")
 		return 650
 	if (action === "attack" || action === "flank")
