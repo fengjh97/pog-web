@@ -266,13 +266,14 @@ let focus = null
 let focus_box = document.getElementById("focus")
 
 let previous_piece_locations = null
+let previous_reduced_pieces = null
 let previous_last_card = null
 let previous_replay_snapshot = null
 let movement_report_timers = []
 let piece_movement_animations = []
 let card_reveal_timers = []
-const PIECE_MOVE_DURATION = 1200
-const PIECE_MOVE_STAGGER = 650
+const PIECE_MOVE_DURATION = 1500
+const PIECE_MOVE_STAGGER = 760
 
 function replay_snapshot_number() {
     let prompt = String(view.prompt || "")
@@ -294,6 +295,16 @@ function movement_changes() {
         if (from !== to)
             result.push({ piece: p, from: abs(from), to: abs(to) })
     }
+    return result
+}
+
+function reduction_changes() {
+    if (!previous_reduced_pieces)
+        return []
+    let result = []
+    for (let piece of view.reduced || [])
+        if (!previous_reduced_pieces.has(piece))
+            result.push(piece)
     return result
 }
 
@@ -344,6 +355,10 @@ function stop_piece_movements() {
     piece_movement_animations = []
     for (let elt of document.querySelectorAll(".unit.is-moving"))
         elt.classList.remove("is-moving")
+    for (let elt of document.querySelectorAll(".unit.is-reducing"))
+        elt.classList.remove("is-reducing")
+    for (let ghost of document.querySelectorAll(".piece-ghost"))
+        ghost.remove()
 }
 
 function report_movements(movements) {
@@ -385,10 +400,79 @@ function report_movements(movements) {
     }, 2000 + Math.max(0, movements.length - 1) * step_delay))
 }
 
-function animate_piece_movements(movements, old_positions) {
-    if (movements.length === 0)
+function track_piece_animation(animation, element, class_name, remove_element) {
+    piece_movement_animations.push(animation)
+    let finish = () => {
+        if (element) {
+            if (class_name)
+                element.classList.remove(class_name)
+            if (remove_element)
+                element.remove()
+        }
+        let index = piece_movement_animations.indexOf(animation)
+        if (index >= 0)
+            piece_movement_animations.splice(index, 1)
+    }
+    if (animation.finished)
+        animation.finished.then(finish, finish)
+    else
+        window.setTimeout(finish, PIECE_MOVE_DURATION + 100)
+}
+
+function animate_piece_exit(movement, before, delay) {
+    let source = pieces[movement.piece].element
+    if (!source || !before)
         return
+
+    let ghost = source.cloneNode(false)
+    ghost.removeAttribute("id")
+    ghost.classList.remove("offmap", "highlight", "selected", "attract", "is-moving")
+    ghost.classList.add("piece-ghost")
+    ghost.style.left = before.left + "px"
+    ghost.style.top = before.top + "px"
+    ghost.style.width = before.width + "px"
+    ghost.style.height = before.height + "px"
+    document.body.appendChild(ghost)
+
+    let animation = ghost.animate([
+        { transform: "perspective(260px) translate3d(0,0,0) rotateX(7deg) rotateY(0) rotateZ(0) scale(1)", opacity: 1, filter: "brightness(1) saturate(1) drop-shadow(0 4px 2px #0009)" },
+        { transform: "perspective(260px) translate3d(0,-13px,25px) rotateX(22deg) rotateY(-9deg) rotateZ(-4deg) scale(1.1)", opacity: 1, filter: "brightness(1.18) saturate(.92) drop-shadow(0 18px 8px #0009)", offset: 0.38 },
+        { transform: "perspective(260px) translate3d(12px,22px,0) rotateX(78deg) rotateY(18deg) rotateZ(16deg) scale(.82)", opacity: 0, filter: "brightness(.55) saturate(.2) drop-shadow(0 3px 2px #0008)" },
+    ], {
+        duration: PIECE_MOVE_DURATION,
+        delay: delay,
+        easing: "cubic-bezier(.2,.72,.18,1)",
+        fill: "both",
+    })
+    track_piece_animation(animation, ghost, null, true)
+}
+
+function animate_piece_reductions(reductions, moving_pieces) {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+        return
+    for (let piece of reductions) {
+        if (moving_pieces.has(piece))
+            continue
+        let elt = pieces[piece].element
+        if (!elt || !elt.isConnected || elt.classList.contains("offmap") || typeof elt.animate !== "function")
+            continue
+        elt.classList.add("is-reducing")
+        let animation = elt.animate([
+            { transform: "perspective(220px) rotateY(-96deg) rotateX(10deg) scale(.9)", filter: "brightness(1.7) saturate(.7) drop-shadow(0 10px 5px #0009)" },
+            { transform: "perspective(220px) rotateY(9deg) rotateX(12deg) scale(1.1)", filter: "brightness(1.15) saturate(.82) drop-shadow(0 12px 6px #0009)", offset: .72 },
+            { transform: "perspective(220px) rotateY(0) rotateX(7deg) scale(1)", filter: "brightness(1) saturate(.84) drop-shadow(0 4px 2px #0009)" },
+        ], {
+            duration: 820,
+            easing: "cubic-bezier(.18,.8,.2,1)",
+        })
+        track_piece_animation(animation, elt, "is-reducing", false)
+    }
+}
+
+function animate_piece_movements(movements, old_positions, reductions) {
     stop_piece_movements()
+    if (movements.length === 0)
+        return animate_piece_reductions(reductions, new Set())
     report_movements(movements)
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches)
@@ -397,28 +481,37 @@ function animate_piece_movements(movements, old_positions) {
     let map = document.getElementById("map")
     let scale = map.getBoundingClientRect().width / map.offsetWidth || 1
     let movement_index = 0
+    let moving_pieces = new Set(movements.map(movement => movement.piece))
 
     for (let movement of movements) {
         let elt = pieces[movement.piece].element
-        if (!elt || !elt.isConnected || elt.classList.contains("offmap") || typeof elt.animate !== "function")
+        let before = old_positions.get(movement.piece)
+        if (elt && elt.classList.contains("offmap")) {
+            animate_piece_exit(movement, before, movement_index * PIECE_MOVE_STAGGER)
+            movement_index++
+            continue
+        }
+        if (!elt || !elt.isConnected || typeof elt.animate !== "function")
             continue
 
-        let before = old_positions.get(movement.piece)
         let after = elt.getBoundingClientRect()
         let keyframes
         if (before) {
             let dx = (before.left - after.left) / scale
             let dy = (before.top - after.top) / scale
+            let bank = dx < 0 ? -7 : 7
             keyframes = [
-                { translate: `${dx}px ${dy}px`, scale: 1, filter: "brightness(1) drop-shadow(0 2px 2px #0008)" },
-                { translate: `${dx * 0.22}px ${dy * 0.22 - 7}px`, scale: 1.12, filter: "brightness(1.14) drop-shadow(0 12px 7px #0008)", offset: 0.72 },
-                { translate: "0 0", scale: 1, filter: "brightness(1) drop-shadow(0 3px 2px #0009)" },
+                { transform: `perspective(250px) translate3d(${dx}px,${dy}px,0) rotateX(7deg) rotateY(0) rotateZ(0) scale(1)`, filter: "brightness(1) drop-shadow(0 3px 2px #0009)", boxShadow: "0 2px 0 #211d15, 0 4px 3px #0009" },
+                { transform: `perspective(250px) translate3d(${dx}px,${dy - 5}px,22px) rotateX(18deg) rotateY(${bank}deg) rotateZ(${-bank / 2}deg) scale(1.1)`, filter: "brightness(1.13) drop-shadow(0 16px 8px #0009)", boxShadow: "0 3px 0 #211d15, 0 14px 9px #0008", offset: 0.16 },
+                { transform: `perspective(250px) translate3d(${dx * 0.24}px,${dy * 0.24 - 9}px,30px) rotateX(20deg) rotateY(${-bank * .7}deg) rotateZ(${bank / 3}deg) scale(1.15)`, filter: "brightness(1.17) drop-shadow(0 20px 10px #0009)", boxShadow: "0 4px 0 #211d15, 0 18px 11px #0008", offset: 0.72 },
+                { transform: "perspective(250px) translate3d(0,-4px,8px) rotateX(13deg) rotateY(2deg) rotateZ(-1deg) scale(1.07)", filter: "brightness(1.08) drop-shadow(0 10px 5px #0009)", boxShadow: "0 3px 0 #211d15, 0 9px 6px #0008", offset: 0.9 },
+                { transform: "perspective(250px) translate3d(0,0,0) rotateX(7deg) rotateY(0) rotateZ(0) scale(1)", filter: "brightness(1) drop-shadow(0 4px 2px #0009)", boxShadow: "0 2px 0 #211d15, 0 4px 3px #0009" },
             ]
         } else {
             keyframes = [
-                { translate: "0 -18px", scale: 0.82, opacity: 0 },
-                { translate: "0 -5px", scale: 1.1, opacity: 1, offset: 0.72 },
-                { translate: "0 0", scale: 1, opacity: 1 },
+                { transform: "perspective(250px) translate3d(0,-28px,34px) rotateX(62deg) rotateY(-14deg) rotateZ(-8deg) scale(.74)", opacity: 0, filter: "brightness(1.5) drop-shadow(0 18px 8px #0008)" },
+                { transform: "perspective(250px) translate3d(0,-6px,12px) rotateX(14deg) rotateY(4deg) rotateZ(2deg) scale(1.12)", opacity: 1, filter: "brightness(1.14) drop-shadow(0 12px 6px #0009)", offset: 0.78 },
+                { transform: "perspective(250px) translate3d(0,0,0) rotateX(7deg) rotateY(0) rotateZ(0) scale(1)", opacity: 1, filter: "brightness(1) drop-shadow(0 4px 2px #0009)" },
             ]
         }
 
@@ -429,19 +522,10 @@ function animate_piece_movements(movements, old_positions) {
             easing: "cubic-bezier(.2,.72,.18,1)",
             fill: "backwards",
         })
-        piece_movement_animations.push(animation)
-        let finish = () => {
-            elt.classList.remove("is-moving")
-            let index = piece_movement_animations.indexOf(animation)
-            if (index >= 0)
-                piece_movement_animations.splice(index, 1)
-        }
-        if (animation.finished)
-            animation.finished.then(finish, finish)
-        else
-            window.setTimeout(finish, PIECE_MOVE_DURATION + movement_index * PIECE_MOVE_STAGGER)
+        track_piece_animation(animation, elt, "is-moving", false)
         movement_index++
     }
+    animate_piece_reductions(reductions, moving_pieces)
 }
 
 function stop_card_reveal() {
@@ -3256,6 +3340,7 @@ function on_update() {
     let replay_snapshot = replay_snapshot_number()
     let reverse_replay = is_reverse_replay_transition(replay_snapshot)
     let movements = reverse_replay ? [] : movement_changes()
+    let reductions = reverse_replay ? [] : reduction_changes()
     let old_positions = capture_moving_piece_positions(movements)
     if (reverse_replay) {
         stop_piece_movements()
@@ -3263,9 +3348,10 @@ function on_update() {
     }
     hide_supply()
     update_map()
-    animate_piece_movements(movements, old_positions)
+    animate_piece_movements(movements, old_positions, reductions)
     reveal_last_card(reverse_replay)
     previous_piece_locations = view.location.slice()
+    previous_reduced_pieces = new Set(view.reduced || [])
     previous_replay_snapshot = replay_snapshot
 }
 
