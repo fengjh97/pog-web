@@ -8,8 +8,10 @@
 ;(function () {
 
 var MOBILE_MQ = window.matchMedia("(max-width: 800px)")
+var MAP_LAYOUT_MODE = MOBILE_MQ.matches ? "mobile" : "desktop"
 var TUTORIAL_KEY = "pog_academy_complete_v3"
-var MAP_FIT_KEY = "pog_map_focus_default_v2"
+var MAP_FIT_KEY = "pog_map_fit_mode_v4/"
+var MAP_FOCUS_KEY = "pog_map_focus_mobile_v4"
 var SHEET_NAMES = [ "map", "hand", "actions", "data", "log" ]
 var active_sheet = null
 var tutorial_step = 0
@@ -633,25 +635,34 @@ function maybe_start_tutorial() {
 }
 
 function maybe_fit_map() {
-	var already_fit = false
-	try { already_fit = window.localStorage.getItem(MAP_FIT_KEY) === "1" } catch (error) {}
-	if (already_fit) return
 	setTimeout(function () {
 		var main = $("main")
-		if (!main) return
-		if (MOBILE_MQ.matches) {
-			var mapwrap = $("#mapwrap")
-			if (mapwrap) mapwrap.dataset.fit = "none"
-			try {
-				if (typeof params !== "undefined") window.localStorage.removeItem(params.title_id + "/map-fit")
-			} catch (error) {}
-			if (typeof update_zoom === "function") update_zoom()
-			jump_to_region(REGIONS[0])
-		} else if (current_scale(main) >= 0.9 && typeof toggle_zoom === "function") {
-			toggle_zoom()
+		var mapwrap = $("#mapwrap")
+		if (!main || !mapwrap) return
+		var fit = MAP_LAYOUT_MODE === "mobile" ? "none" : "width"
+		try { fit = window.localStorage.getItem(MAP_FIT_KEY + MAP_LAYOUT_MODE) || fit } catch (error) {}
+		if ([ "none", "width", "both" ].indexOf(fit) < 0)
+			fit = MAP_LAYOUT_MODE === "mobile" ? "none" : "width"
+		mapwrap.dataset.fit = fit
+		try {
+			if (typeof params !== "undefined") window.localStorage.setItem(params.title_id + "/map-fit", fit)
+		} catch (error) {}
+		if (typeof update_zoom === "function") update_zoom()
+		if (MAP_LAYOUT_MODE === "mobile") {
+			var focused = false
+			try { focused = window.localStorage.getItem(MAP_FOCUS_KEY) === "1" } catch (error) {}
+			if (!focused) {
+				jump_to_region(REGIONS[0])
+				try { window.localStorage.setItem(MAP_FOCUS_KEY, "1") } catch (error) {}
+			}
 		}
-		try { window.localStorage.setItem(MAP_FIT_KEY, "1") } catch (error) {}
 	}, 500)
+}
+
+function remember_map_fit() {
+	var mapwrap = $("#mapwrap")
+	if (!mapwrap) return
+	try { window.localStorage.setItem(MAP_FIT_KEY + MAP_LAYOUT_MODE, mapwrap.dataset.fit || "none") } catch (error) {}
 }
 
 window.addEventListener("load", function () {
@@ -659,5 +670,7 @@ window.addEventListener("load", function () {
 	maybe_fit_map()
 	maybe_start_tutorial()
 })
+
+window.addEventListener("pagehide", remember_map_fit)
 
 })()
