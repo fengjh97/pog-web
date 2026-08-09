@@ -296,7 +296,8 @@ LocalSocket.prototype._maybe_hotseat_switch = function () {
 /* ---------- AI ---------- */
 
 var ai_timer = null
-var ai_next_delay = 500
+var AI_PACE = 1.45 // Give players time to follow the computer's card and map choices.
+var ai_next_delay = 700
 var nn_model = null      // legacy value network, loaded on demand
 var nn_load_failed = false
 var bfull_model = null   // recurrent RL2 policy, loaded on demand
@@ -372,7 +373,7 @@ function schedule_ai(sock) {
 		ai_timer = null
 		ai_step(sock)
 	}, ai_next_delay)
-	ai_next_delay = 320
+	ai_next_delay = 460
 }
 
 function ai_step(sock) {
@@ -496,19 +497,22 @@ function heuristic_choose(candidates, role) {
 }
 
 function action_delay(choice, v) {
+	var delay
 	if (save_meta.ai_kind === "bfull" && window.pog_bfull)
-		return window.pog_bfull.delay(choice, v)
+		delay = window.pog_bfull.delay(choice, v)
 	var action = choice[0]
 	var prompt = v.prompt || ""
-	if (action.indexOf("play_") === 0)
-		return 900
-	if ((action === "space" || action === "piece") && /move|advance|retreat|redeployment/i.test(prompt))
-		return 1400
-	if (action === "space" || action === "piece")
-		return 650
-	if (action === "attack" || action === "flank")
-		return 800
-	return 360
+	if (delay === undefined && action.indexOf("play_") === 0)
+		delay = 900
+	if (delay === undefined && (action === "space" || action === "piece") && /move|advance|retreat|redeployment/i.test(prompt))
+		delay = 1400
+	if (delay === undefined && (action === "space" || action === "piece"))
+		delay = 650
+	if (delay === undefined && (action === "attack" || action === "flank"))
+		delay = 800
+	if (delay === undefined)
+		delay = 360
+	return Math.round(delay * AI_PACE)
 }
 
 function resolve_combat(s) {
