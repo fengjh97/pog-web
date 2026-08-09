@@ -9,7 +9,7 @@
 
 var MOBILE_MQ = window.matchMedia("(max-width: 800px)")
 var TUTORIAL_KEY = "pog_academy_complete_v3"
-var MAP_FIT_KEY = "pog_map_fit_default_v1"
+var MAP_FIT_KEY = "pog_map_focus_default_v2"
 var SHEET_NAMES = [ "map", "hand", "actions", "data", "log" ]
 var active_sheet = null
 var tutorial_step = 0
@@ -638,10 +638,19 @@ function maybe_fit_map() {
 	if (already_fit) return
 	setTimeout(function () {
 		var main = $("main")
-		if (main && current_scale(main) >= 0.9 && typeof toggle_zoom === "function") {
+		if (!main) return
+		if (MOBILE_MQ.matches) {
+			var mapwrap = $("#mapwrap")
+			if (mapwrap) mapwrap.dataset.fit = "none"
+			try {
+				if (typeof params !== "undefined") window.localStorage.removeItem(params.title_id + "/map-fit")
+			} catch (error) {}
+			if (typeof update_zoom === "function") update_zoom()
+			jump_to_region(REGIONS[0])
+		} else if (current_scale(main) >= 0.9 && typeof toggle_zoom === "function") {
 			toggle_zoom()
-			try { window.localStorage.setItem(MAP_FIT_KEY, "1") } catch (error) {}
 		}
+		try { window.localStorage.setItem(MAP_FIT_KEY, "1") } catch (error) {}
 	}, 500)
 }
 
