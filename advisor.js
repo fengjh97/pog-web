@@ -207,15 +207,16 @@ function highlight_suggestion(sug) {
 	if (!el)
 		return
 
-	if (MOBILE_MQ.matches) {
-		if (kind === "card") {
-			// 打开手牌抽屉给你看是哪张
+	if (window.POG_UI) {
+		if (kind === "card")
+			window.POG_UI.open("hand")
+		else if (kind === "map")
+			window.POG_UI.close()
+	} else if (MOBILE_MQ.matches) {
+		if (kind === "card")
 			document.body.classList.add("hq-hand-open")
-			document.body.classList.remove("hq-advisor-open")
-		} else if (kind === "map") {
+		else if (kind === "map")
 			document.body.classList.remove("hq-hand-open")
-			document.body.classList.remove("hq-advisor-open")
-		}
 	}
 
 	el.classList.add("adv_highlight")
@@ -249,10 +250,14 @@ function build_panel() {
 				"</div>" +
 			"</div>" +
 		"</div>"
-	document.body.appendChild(panel)
+	var host = document.getElementById("hq_advisor_host")
+	;(host || document.body).appendChild(panel)
 
 	panel.querySelector(".adv_x").addEventListener("click", function () {
-		document.body.classList.remove("hq-advisor-open")
+		if (window.POG_UI)
+			window.POG_UI.close()
+		else
+			document.body.classList.remove("hq-advisor-open")
 	})
 	panel.querySelector(".adv_ask").addEventListener("click", compute_suggestion)
 	panel.querySelector(".adv_do").addEventListener("click", function () {
@@ -263,33 +268,6 @@ function build_panel() {
 		}
 	})
 
-	// 桌面端：常驻切换钮
-	if (!MOBILE_MQ.matches) {
-		var toggle = document.createElement("button")
-		toggle.id = "hq_advisor_toggle"
-		toggle.type = "button"
-		toggle.textContent = "✦ 参谋"
-		toggle.addEventListener("click", function () {
-			document.body.classList.toggle("hq-advisor-open")
-		})
-		document.body.appendChild(toggle)
-	}
-}
-
-function add_dock_button() {
-	var dock = document.getElementById("hq_dock")
-	if (!dock)
-		return
-	var hand = document.getElementById("hq_hand_btn")
-	var b = document.createElement("button")
-	b.type = "button"
-	b.id = "hq_advisor_btn"
-	b.innerHTML = "参谋<small>STAFF</small>"
-	b.addEventListener("click", function () {
-		document.body.classList.remove("hq-hand-open")
-		document.body.classList.toggle("hq-advisor-open")
-	})
-	dock.insertBefore(b, hand)
 }
 
 function hide_result() {
@@ -354,12 +332,7 @@ function refresh_hint() {
 
 window.addEventListener("load", function () {
 	build_panel()
-	// 手机 dock 由 mobile.js 建，稍等一拍再挂按钮
-	setTimeout(add_dock_button, 100)
 	setInterval(refresh_hint, 700)
-	// 桌面默认展开参谋面板；手机默认收起
-	if (!MOBILE_MQ.matches)
-		document.body.classList.add("hq-advisor-open")
 })
 
 })()

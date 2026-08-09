@@ -1661,7 +1661,7 @@ function is_action(action, card) {
 }
 
 function on_click_card(evt) {
-    let card = evt.target.card
+    let card = evt.currentTarget.card
     if (is_action('card', card)) {
         send_action('card', card)
     } else {
@@ -3108,10 +3108,10 @@ function update_map() {
     update_reinforcements_view()
     update_perm_elim_box()
 
-    document.getElementById("cp_hand").textContent = `${view.cp.hand} cards`
-    document.getElementById("ap_hand").textContent = `${view.ap.hand} cards`
-    document.getElementById("ap_deck_size").textContent = `Allied Powers deck: ${view.ap.deck} cards`
-    document.getElementById("cp_deck_size").textContent = `Central Powers deck: ${view.cp.deck} cards`
+    document.getElementById("cp_hand").textContent = `${view.cp.hand} 张手牌`
+    document.getElementById("ap_hand").textContent = `${view.ap.hand} 张手牌`
+    document.getElementById("ap_deck_size").textContent = `协约国牌库：${view.ap.deck} 张`
+    document.getElementById("cp_deck_size").textContent = `同盟国牌库：${view.cp.deck} 张`
 
     let rollback_menu = document.getElementById("propose_rollback_menu")
     if (can_propose_rollback()) {
