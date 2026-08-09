@@ -8,7 +8,7 @@
 ;(function () {
 
 var MOBILE_MQ = window.matchMedia("(max-width: 800px)")
-var TUTORIAL_KEY = "pog_academy_complete_v2"
+var TUTORIAL_KEY = "pog_academy_complete_v3"
 var MAP_FIT_KEY = "pog_map_fit_default_v1"
 var SHEET_NAMES = [ "map", "hand", "actions", "data", "log" ]
 var active_sheet = null
