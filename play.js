@@ -271,6 +271,8 @@ let previous_replay_snapshot = null
 let movement_report_timers = []
 let piece_movement_animations = []
 let card_reveal_timers = []
+const PIECE_MOVE_DURATION = 1200
+const PIECE_MOVE_STAGGER = 650
 
 function replay_snapshot_number() {
     let prompt = String(view.prompt || "")
@@ -350,7 +352,7 @@ function report_movements(movements) {
 
     let report = document.getElementById("movement_report")
     let reduced_motion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    let step_delay = reduced_motion ? 0 : 420
+    let step_delay = reduced_motion ? 0 : PIECE_MOVE_STAGGER
 
     stop_movement_report()
     report.hidden = false
@@ -380,7 +382,7 @@ function report_movements(movements) {
     movement_report_timers.push(window.setTimeout(() => {
         report.classList.remove("show")
         movement_report_timers.push(window.setTimeout(() => { report.hidden = true }, 250))
-    }, 1600 + Math.max(0, movements.length - 1) * step_delay))
+    }, 2000 + Math.max(0, movements.length - 1) * step_delay))
 }
 
 function animate_piece_movements(movements, old_positions) {
@@ -422,8 +424,8 @@ function animate_piece_movements(movements, old_positions) {
 
         elt.classList.add("is-moving")
         let animation = elt.animate(keyframes, {
-            duration: 820,
-            delay: movement_index * 420,
+            duration: PIECE_MOVE_DURATION,
+            delay: movement_index * PIECE_MOVE_STAGGER,
             easing: "cubic-bezier(.2,.72,.18,1)",
             fill: "backwards",
         })
@@ -437,7 +439,7 @@ function animate_piece_movements(movements, old_positions) {
         if (animation.finished)
             animation.finished.then(finish, finish)
         else
-            window.setTimeout(finish, 820 + movement_index * 420)
+            window.setTimeout(finish, PIECE_MOVE_DURATION + movement_index * PIECE_MOVE_STAGGER)
         movement_index++
     }
 }

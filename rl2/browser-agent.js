@@ -289,8 +289,8 @@ function delay(choice, view) {
 	var prompt = view.prompt || ""
 	if (action.startsWith("play_"))
 		return 1100
-	if (action === "space" && /move|advance|retreat|redeployment/i.test(prompt))
-		return 950
+	if ((action === "space" || action === "piece") && /move|advance|retreat|redeployment/i.test(prompt))
+		return 1500
 	if (action === "piece" && /loss|eliminate|reduce/i.test(prompt))
 		return 550
 	if (action === "attack" || action === "confirm_mutiny_attack")
